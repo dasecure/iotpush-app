@@ -8,8 +8,9 @@ import {
   RefreshControl,
   Share,
   Alert,
-  Clipboard,
+  Platform,
 } from "react-native";
+import * as Clipboard from "expo-clipboard";
 import { supabase } from "../lib/supabase";
 import { Topic, Message } from "../lib/types";
 
@@ -65,13 +66,13 @@ export default function MessagesScreen({ topic, onBack }: MessagesScreenProps) {
 
   const copyEndpoint = () => {
     const url = `https://iotpush.com/api/push/${topic.name}`;
-    Clipboard.setString(url);
+    Clipboard.setStringAsync(url);
     Alert.alert("Copied!", `Endpoint URL copied to clipboard`);
   };
 
   const copyCurl = () => {
     const cmd = `curl -d "Your message" https://iotpush.com/api/push/${topic.name}`;
-    Clipboard.setString(cmd);
+    Clipboard.setStringAsync(cmd);
     Alert.alert("Copied!", "curl command copied to clipboard");
   };
 
@@ -136,7 +137,7 @@ export default function MessagesScreen({ topic, onBack }: MessagesScreenProps) {
         <TouchableOpacity
           style={styles.apiKeyBar}
           onPress={() => {
-            Clipboard.setString(topic.api_key);
+            Clipboard.setStringAsync(topic.api_key);
             Alert.alert("Copied!", "API key copied");
           }}
         >

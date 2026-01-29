@@ -9,6 +9,7 @@ import {
   Alert,
   TextInput,
   Modal,
+  Platform,
 } from "react-native";
 import { supabase } from "../lib/supabase";
 import { Topic } from "../lib/types";
