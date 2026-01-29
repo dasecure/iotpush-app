@@ -21,13 +21,7 @@
       "package": "com.dasecure.iotpush"
     },
     "plugins": [
-      [
-        "expo-notifications",
-        {
-          "icon": "./assets/notification-icon.png",
-          "color": "#f97316"
-        }
-      ]
+      "expo-notifications"
     ]
   }
 }
