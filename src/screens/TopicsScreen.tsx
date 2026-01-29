@@ -9,6 +9,7 @@ import {
   Alert,
   TextInput,
   Modal,
+  ActivityIndicator,
   Platform,
 } from "react-native";
 import { supabase } from "../lib/supabase";
@@ -16,11 +17,12 @@ import { Topic } from "../lib/types";
 
 interface TopicsScreenProps {
   onSelectTopic: (topic: Topic) => void;
-  onLogout: () => void;
 }
 
-export default function TopicsScreen({ onSelectTopic, onLogout }: TopicsScreenProps) {
+export default function TopicsScreen({ onSelectTopic }: TopicsScreenProps) {
   const [topics, setTopics] = useState<Topic[]>([]);
+  const [messageCounts, setMessageCounts] = useState<Record<string, number>>({});
+  const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
   const [newName, setNewName] = useState("");
@@ -28,11 +30,29 @@ export default function TopicsScreen({ onSelectTopic, onLogout }: TopicsScreenPr
   const [creating, setCreating] = useState(false);
 
   const fetchTopics = useCallback(async () => {
-    const { data } = await supabase
-      .from("iot_topics")
-      .select("*")
-      .order("created_at", { ascending: false });
-    if (data) setTopics(data);
+    try {
+      const { data } = await supabase
+        .from("iot_topics")
+        .select("*")
+        .order("created_at", { ascending: false });
+      if (data) {
+        setTopics(data);
+        // Fetch message counts for all topics
+        const counts: Record<string, number> = {};
+        for (const topic of data) {
+          const { count } = await supabase
+            .from("iot_messages")
+            .select("*", { count: "exact", head: true })
+            .eq("topic_id", topic.id);
+          counts[topic.id] = count || 0;
+        }
+        setMessageCounts(counts);
+      }
+    } catch (e) {
+      console.log("Failed to fetch topics:", e);
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => {
@@ -49,24 +69,28 @@ export default function TopicsScreen({ onSelectTopic, onLogout }: TopicsScreenPr
     if (!newName.trim()) return;
     setCreating(true);
 
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
 
-    const { error } = await supabase.from("iot_topics").insert({
-      user_id: user.id,
-      name: newName.trim().toLowerCase().replace(/[^a-z0-9-]/g, "-"),
-      description: newDesc.trim() || null,
-    });
+      const { error } = await supabase.from("iot_topics").insert({
+        user_id: user.id,
+        name: newName.trim().toLowerCase().replace(/[^a-z0-9-]/g, "-"),
+        description: newDesc.trim() || null,
+      });
 
-    setCreating(false);
-
-    if (error) {
-      Alert.alert("Error", error.message);
-    } else {
-      setNewName("");
-      setNewDesc("");
-      setShowCreate(false);
-      fetchTopics();
+      if (error) {
+        Alert.alert("Error", error.message);
+      } else {
+        setNewName("");
+        setNewDesc("");
+        setShowCreate(false);
+        fetchTopics();
+      }
+    } catch (e) {
+      Alert.alert("Error", "Failed to create topic");
+    } finally {
+      setCreating(false);
     }
   };
 
@@ -84,18 +108,13 @@ export default function TopicsScreen({ onSelectTopic, onLogout }: TopicsScreenPr
     ]);
   };
 
-  const handleLogout = () => {
-    Alert.alert("Logout", "Are you sure?", [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Logout",
-        onPress: async () => {
-          await supabase.auth.signOut();
-          onLogout();
-        },
-      },
-    ]);
-  };
+  if (loading) {
+    return (
+      <View style={[styles.container, styles.center]}>
+        <ActivityIndicator size="large" color="#f97316" />
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -105,16 +124,11 @@ export default function TopicsScreen({ onSelectTopic, onLogout }: TopicsScreenPr
           <Text style={styles.logo}>
             iot<Text style={styles.logoAccent}>push</Text>
           </Text>
-          <Text style={styles.subtitle}>{topics.length} topics</Text>
+          <Text style={styles.subtitle}>{topics.length} topic{topics.length !== 1 ? "s" : ""}</Text>
         </View>
-        <View style={styles.headerRight}>
-          <TouchableOpacity style={styles.addButton} onPress={() => setShowCreate(true)}>
-            <Text style={styles.addButtonText}>+ New</Text>
-          </TouchableOpacity>
-          <TouchableOpacity onPress={handleLogout}>
-            <Text style={styles.logoutText}>Logout</Text>
-          </TouchableOpacity>
-        </View>
+        <TouchableOpacity style={styles.addButton} onPress={() => setShowCreate(true)}>
+          <Text style={styles.addButtonText}>+ New</Text>
+        </TouchableOpacity>
       </View>
 
       {/* Topics List */}
@@ -122,7 +136,7 @@ export default function TopicsScreen({ onSelectTopic, onLogout }: TopicsScreenPr
         data={topics}
         keyExtractor={(item) => item.id}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#f97316" />}
-        contentContainerStyle={styles.list}
+        contentContainerStyle={[styles.list, topics.length === 0 && { flex: 1 }]}
         ListEmptyComponent={
           <View style={styles.empty}>
             <Text style={styles.emptyIcon}>🔔</Text>
@@ -138,14 +152,22 @@ export default function TopicsScreen({ onSelectTopic, onLogout }: TopicsScreenPr
             style={styles.topicCard}
             onPress={() => onSelectTopic(item)}
             onLongPress={() => deleteTopic(item)}
+            activeOpacity={0.7}
           >
             <View style={styles.topicHeader}>
               <Text style={styles.topicName}>{item.name}</Text>
-              {item.is_private && (
-                <View style={styles.privateBadge}>
-                  <Text style={styles.privateBadgeText}>🔒 Private</Text>
+              <View style={styles.topicMeta}>
+                {item.is_private && (
+                  <View style={styles.privateBadge}>
+                    <Text style={styles.privateBadgeText}>🔒</Text>
+                  </View>
+                )}
+                <View style={styles.countBadge}>
+                  <Text style={styles.countText}>
+                    {messageCounts[item.id] ?? "—"} msg{(messageCounts[item.id] ?? 0) !== 1 ? "s" : ""}
+                  </Text>
                 </View>
-              )}
+              </View>
             </View>
             {item.description && (
               <Text style={styles.topicDesc}>{item.description}</Text>
@@ -191,7 +213,9 @@ export default function TopicsScreen({ onSelectTopic, onLogout }: TopicsScreenPr
                 onPress={createTopic}
                 disabled={creating}
               >
-                <Text style={styles.createButtonText}>Create</Text>
+                <Text style={styles.createButtonText}>
+                  {creating ? "Creating..." : "Create"}
+                </Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -203,6 +227,7 @@ export default function TopicsScreen({ onSelectTopic, onLogout }: TopicsScreenPr
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#030712" },
+  center: { justifyContent: "center", alignItems: "center" },
   header: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -212,13 +237,11 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: "#1f2937",
   },
-  headerRight: { flexDirection: "row", alignItems: "center", gap: 16 },
   logo: { fontSize: 28, fontWeight: "bold", color: "#fff" },
   logoAccent: { color: "#f97316" },
   subtitle: { fontSize: 14, color: "#6b7280", marginTop: 2 },
   addButton: { backgroundColor: "#f97316", paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8 },
   addButtonText: { color: "#000", fontWeight: "600", fontSize: 14 },
-  logoutText: { color: "#6b7280", fontSize: 14 },
   list: { padding: 16, gap: 12 },
   topicCard: {
     backgroundColor: "#111827",
@@ -229,12 +252,20 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   topicHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  topicName: { fontSize: 18, fontWeight: "600", color: "#fff" },
-  privateBadge: { backgroundColor: "#f9731620", paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 },
-  privateBadgeText: { color: "#f97316", fontSize: 12 },
+  topicName: { fontSize: 18, fontWeight: "600", color: "#fff", flex: 1 },
+  topicMeta: { flexDirection: "row", alignItems: "center", gap: 8 },
+  privateBadge: { marginRight: 4 },
+  privateBadgeText: { fontSize: 14 },
+  countBadge: {
+    backgroundColor: "#1f2937",
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    borderRadius: 8,
+  },
+  countText: { color: "#9ca3af", fontSize: 12, fontWeight: "500" },
   topicDesc: { color: "#9ca3af", fontSize: 14, marginTop: 4 },
   topicEndpoint: { color: "#6b7280", fontSize: 12, fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace", marginTop: 8 },
-  empty: { alignItems: "center", paddingTop: 80 },
+  empty: { flex: 1, alignItems: "center", justifyContent: "center", paddingTop: 80 },
   emptyIcon: { fontSize: 48, marginBottom: 16 },
   emptyTitle: { fontSize: 20, fontWeight: "600", color: "#fff", marginBottom: 8 },
   emptyText: { fontSize: 14, color: "#6b7280", textAlign: "center", marginBottom: 24 },
