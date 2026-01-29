@@ -82,7 +82,7 @@ export default function MessagesScreen({ topic, onBack }: MessagesScreenProps) {
     setSending(true);
 
     try {
-      const url = `https://iotpush.com/api/push/${topic.name}`;
+      const url = `https://www.iotpush.com/api/push/${topic.name}`;
       const headers: Record<string, string> = {
         "Content-Type": "text/plain",
       };
@@ -110,20 +110,20 @@ export default function MessagesScreen({ topic, onBack }: MessagesScreenProps) {
   };
 
   const copyEndpoint = () => {
-    const url = `https://iotpush.com/api/push/${topic.name}`;
+    const url = `https://www.iotpush.com/api/push/${topic.name}`;
     Clipboard.setStringAsync(url);
     Alert.alert("Copied!", `Endpoint URL copied to clipboard`);
   };
 
   const copyCurl = () => {
-    const cmd = `curl -d "Your message" https://iotpush.com/api/push/${topic.name}`;
+    const cmd = `curl -d "Your message" https://www.iotpush.com/api/push/${topic.name}`;
     Clipboard.setStringAsync(cmd);
     Alert.alert("Copied!", "curl command copied to clipboard");
   };
 
   const shareEndpoint = () => {
     Share.share({
-      message: `Send push notifications to my "${topic.name}" topic:\n\ncurl -d "Your message" https://iotpush.com/api/push/${topic.name}`,
+      message: `Send push notifications to my "${topic.name}" topic:\n\ncurl -d "Your message" https://www.iotpush.com/api/push/${topic.name}`,
     });
   };
 

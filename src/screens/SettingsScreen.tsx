@@ -18,7 +18,7 @@ interface SettingsScreenProps {
 }
 
 export default function SettingsScreen({ userEmail, pushToken, onLogout }: SettingsScreenProps) {
-  const apiBaseUrl = "https://iotpush.com/api/push/";
+  const apiBaseUrl = "https://www.iotpush.com/api/push/";
 
   const handleLogout = () => {
     Alert.alert("Logout", "Are you sure?", [
