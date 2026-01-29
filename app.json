@@ -8,20 +8,35 @@
     "userInterfaceStyle": "dark",
     "scheme": "iotpush",
     "splash": {
+      "image": "./assets/icon.png",
+      "resizeMode": "contain",
       "backgroundColor": "#030712"
     },
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.dasecure.iotpush"
+      "bundleIdentifier": "com.dasecure.iotpush",
+      "buildNumber": "1",
+      "infoPlist": {
+        "NSAppTransportSecurity": {
+          "NSAllowsArbitraryLoads": false
+        }
+      }
     },
     "android": {
       "adaptiveIcon": {
+        "foregroundImage": "./assets/icon.png",
         "backgroundColor": "#030712"
       },
-      "package": "com.dasecure.iotpush"
+      "package": "com.dasecure.iotpush",
+      "versionCode": 1
     },
     "plugins": [
       "expo-notifications"
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "04542f7e-cb5c-401a-80cc-30c39b27ed06"
+      }
+    }
   }
 }

@@ -30,7 +30,6 @@
     "production": {
       "ios": {
         "appleId": "vincent@dasecure.com",
-        "ascAppId": "iotpush",
         "appleTeamId": "685L2Q2WD9"
       }
     }
