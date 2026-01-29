@@ -1,5 +1,6 @@
 import * as Notifications from "expo-notifications";
 import * as Device from "expo-device";
+import Constants from "expo-constants";
 import { Platform } from "react-native";
 import { supabase } from "./supabase";
 
@@ -37,8 +38,13 @@ export async function registerForPushNotifications(): Promise<string | null> {
     }
 
     // Get Expo push token
+    const projectId = Constants.expoConfig?.extra?.eas?.projectId;
+    if (!projectId) {
+      console.log("No Expo project ID found - run 'eas init' first");
+      return null;
+    }
     const tokenData = await Notifications.getExpoPushTokenAsync({
-      projectId: "iotpush",
+      projectId,
     });
 
     // Android notification channel
