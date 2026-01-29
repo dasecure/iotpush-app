@@ -8,7 +8,10 @@ import {
   RefreshControl,
   Share,
   Alert,
+  TextInput,
+  ActivityIndicator,
   Platform,
+  KeyboardAvoidingView,
 } from "react-native";
 import * as Clipboard from "expo-clipboard";
 import { supabase } from "../lib/supabase";
@@ -21,16 +24,25 @@ interface MessagesScreenProps {
 
 export default function MessagesScreen({ topic, onBack }: MessagesScreenProps) {
   const [messages, setMessages] = useState<Message[]>([]);
+  const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [testMessage, setTestMessage] = useState("");
+  const [sending, setSending] = useState(false);
 
   const fetchMessages = useCallback(async () => {
-    const { data } = await supabase
-      .from("iot_messages")
-      .select("*")
-      .eq("topic_id", topic.id)
-      .order("created_at", { ascending: false })
-      .limit(50);
-    if (data) setMessages(data);
+    try {
+      const { data } = await supabase
+        .from("iot_messages")
+        .select("*")
+        .eq("topic_id", topic.id)
+        .order("created_at", { ascending: false })
+        .limit(50);
+      if (data) setMessages(data);
+    } catch (e) {
+      console.log("Failed to fetch messages:", e);
+    } finally {
+      setLoading(false);
+    }
   }, [topic.id]);
 
   useEffect(() => {
@@ -62,6 +74,39 @@ export default function MessagesScreen({ topic, onBack }: MessagesScreenProps) {
     setRefreshing(true);
     await fetchMessages();
     setRefreshing(false);
+  };
+
+  const sendTestMessage = async () => {
+    const msg = testMessage.trim();
+    if (!msg) return;
+    setSending(true);
+
+    try {
+      const url = `https://iotpush.com/api/push/${topic.name}`;
+      const headers: Record<string, string> = {
+        "Content-Type": "text/plain",
+      };
+      if (topic.is_private) {
+        headers["Authorization"] = `Bearer ${topic.api_key}`;
+      }
+
+      const res = await fetch(url, {
+        method: "POST",
+        headers,
+        body: msg,
+      });
+
+      if (res.ok) {
+        setTestMessage("");
+      } else {
+        const text = await res.text();
+        Alert.alert("Send Failed", text || `HTTP ${res.status}`);
+      }
+    } catch (e: any) {
+      Alert.alert("Send Failed", e.message || "Network error");
+    } finally {
+      setSending(false);
+    }
   };
 
   const copyEndpoint = () => {
@@ -107,7 +152,10 @@ export default function MessagesScreen({ topic, onBack }: MessagesScreenProps) {
   };
 
   return (
-    <View style={styles.container}>
+    <KeyboardAvoidingView
+      style={styles.container}
+      behavior={Platform.OS === "ios" ? "padding" : undefined}
+    >
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={onBack}>
@@ -147,56 +195,87 @@ export default function MessagesScreen({ topic, onBack }: MessagesScreenProps) {
         </TouchableOpacity>
       )}
 
+      {/* Send Test Message */}
+      <View style={styles.sendBar}>
+        <TextInput
+          style={styles.sendInput}
+          placeholder="Send test message..."
+          placeholderTextColor="#6b7280"
+          value={testMessage}
+          onChangeText={setTestMessage}
+          returnKeyType="send"
+          onSubmitEditing={sendTestMessage}
+        />
+        <TouchableOpacity
+          style={[styles.sendButton, (!testMessage.trim() || sending) && styles.sendButtonDisabled]}
+          onPress={sendTestMessage}
+          disabled={!testMessage.trim() || sending}
+        >
+          {sending ? (
+            <ActivityIndicator size="small" color="#000" />
+          ) : (
+            <Text style={styles.sendButtonText}>Send</Text>
+          )}
+        </TouchableOpacity>
+      </View>
+
       {/* Messages */}
-      <FlatList
-        data={messages}
-        keyExtractor={(item) => item.id}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#f97316" />}
-        contentContainerStyle={styles.list}
-        ListEmptyComponent={
-          <View style={styles.empty}>
-            <Text style={styles.emptyIcon}>📭</Text>
-            <Text style={styles.emptyTitle}>No messages yet</Text>
-            <Text style={styles.emptyText}>
-              Send your first notification:{"\n\n"}
-              <Text style={styles.code}>
-                curl -d "Hello!" {"\n"}iotpush.com/api/push/{topic.name}
+      {loading ? (
+        <View style={styles.center}>
+          <ActivityIndicator size="large" color="#f97316" />
+        </View>
+      ) : (
+        <FlatList
+          data={messages}
+          keyExtractor={(item) => item.id}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#f97316" />}
+          contentContainerStyle={[styles.list, messages.length === 0 && { flex: 1 }]}
+          ListEmptyComponent={
+            <View style={styles.empty}>
+              <Text style={styles.emptyIcon}>📭</Text>
+              <Text style={styles.emptyTitle}>No messages yet</Text>
+              <Text style={styles.emptyText}>
+                Send your first notification:{"\n\n"}
+                <Text style={styles.code}>
+                  curl -d "Hello!" {"\n"}iotpush.com/api/push/{topic.name}
+                </Text>
               </Text>
-            </Text>
-          </View>
-        }
-        renderItem={({ item }) => (
-          <View style={styles.messageCard}>
-            <View style={styles.messageHeader}>
-              {item.title ? (
-                <Text style={styles.messageTitle}>{item.title}</Text>
-              ) : null}
-              <Text style={styles.messageTime}>{formatTime(item.created_at)}</Text>
             </View>
-            <Text style={styles.messageBody}>{item.message}</Text>
-            <View style={styles.messageFooter}>
-              {item.priority !== "normal" && (
-                <View style={[styles.priorityBadge, { backgroundColor: priorityColor(item.priority) + "20" }]}>
-                  <Text style={[styles.priorityText, { color: priorityColor(item.priority) }]}>
-                    {item.priority}
-                  </Text>
-                </View>
-              )}
-              {item.tags?.map((tag, i) => (
-                <View key={i} style={styles.tagBadge}>
-                  <Text style={styles.tagText}>{tag}</Text>
-                </View>
-              ))}
+          }
+          renderItem={({ item }) => (
+            <View style={styles.messageCard}>
+              <View style={styles.messageHeader}>
+                {item.title ? (
+                  <Text style={styles.messageTitle}>{item.title}</Text>
+                ) : null}
+                <Text style={styles.messageTime}>{formatTime(item.created_at)}</Text>
+              </View>
+              <Text style={styles.messageBody}>{item.message}</Text>
+              <View style={styles.messageFooter}>
+                {item.priority !== "normal" && (
+                  <View style={[styles.priorityBadge, { backgroundColor: priorityColor(item.priority) + "20" }]}>
+                    <Text style={[styles.priorityText, { color: priorityColor(item.priority) }]}>
+                      {item.priority}
+                    </Text>
+                  </View>
+                )}
+                {item.tags?.map((tag, i) => (
+                  <View key={i} style={styles.tagBadge}>
+                    <Text style={styles.tagText}>{tag}</Text>
+                  </View>
+                ))}
+              </View>
             </View>
-          </View>
-        )}
-      />
-    </View>
+          )}
+        />
+      )}
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#030712" },
+  center: { flex: 1, justifyContent: "center", alignItems: "center" },
   header: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -236,10 +315,41 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     borderWidth: 1,
     borderColor: "#f9731630",
+    marginBottom: 4,
   },
   apiKeyLabel: { color: "#f97316", fontSize: 13, fontWeight: "600" },
-  apiKeyValue: { color: "#d1d5db", fontSize: 13, fontFamily: "monospace", flex: 1 },
+  apiKeyValue: { color: "#d1d5db", fontSize: 13, fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace", flex: 1 },
   apiKeyCopy: { color: "#6b7280", fontSize: 12 },
+  sendBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    gap: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: "#1f2937",
+  },
+  sendInput: {
+    flex: 1,
+    backgroundColor: "#111827",
+    borderWidth: 1,
+    borderColor: "#374151",
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    fontSize: 14,
+    color: "#fff",
+  },
+  sendButton: {
+    backgroundColor: "#f97316",
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    borderRadius: 10,
+    minWidth: 60,
+    alignItems: "center",
+  },
+  sendButtonDisabled: { opacity: 0.4 },
+  sendButtonText: { color: "#000", fontWeight: "600", fontSize: 14 },
   list: { padding: 16, gap: 8 },
   messageCard: {
     backgroundColor: "#111827",
@@ -263,9 +373,9 @@ const styles = StyleSheet.create({
   priorityText: { fontSize: 12, fontWeight: "500" },
   tagBadge: { backgroundColor: "#1f2937", paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 },
   tagText: { color: "#9ca3af", fontSize: 12 },
-  empty: { alignItems: "center", paddingTop: 60 },
+  empty: { flex: 1, alignItems: "center", justifyContent: "center", paddingTop: 60 },
   emptyIcon: { fontSize: 48, marginBottom: 16 },
   emptyTitle: { fontSize: 20, fontWeight: "600", color: "#fff", marginBottom: 8 },
   emptyText: { fontSize: 14, color: "#6b7280", textAlign: "center", lineHeight: 22, paddingHorizontal: 20 },
-  code: { fontFamily: "monospace", color: "#f97316", fontSize: 13 },
+  code: { fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace", color: "#f97316", fontSize: 13 },
 });
