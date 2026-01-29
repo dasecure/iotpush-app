@@ -133,7 +133,7 @@ export default function App() {
       {/* Tab content */}
       <View style={styles.tabContent}>
         {activeTab === "topics" && (
-          <TopicsScreen onSelectTopic={handleSelectTopic} />
+          <TopicsScreen onSelectTopic={handleSelectTopic} pushToken={pushToken} />
         )}
         {activeTab === "inbox" && (
           <AllMessagesScreen onSelectTopic={handleSelectTopic} />

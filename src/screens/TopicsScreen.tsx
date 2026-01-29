@@ -13,13 +13,15 @@ import {
   Platform,
 } from "react-native";
 import { supabase } from "../lib/supabase";
+import { subscribePushToken, unsubscribePushToken } from "../lib/notifications";
 import { Topic } from "../lib/types";
 
 interface TopicsScreenProps {
   onSelectTopic: (topic: Topic) => void;
+  pushToken?: string | null;
 }
 
-export default function TopicsScreen({ onSelectTopic }: TopicsScreenProps) {
+export default function TopicsScreen({ onSelectTopic, pushToken }: TopicsScreenProps) {
   const [topics, setTopics] = useState<Topic[]>([]);
   const [messageCounts, setMessageCounts] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
@@ -28,6 +30,9 @@ export default function TopicsScreen({ onSelectTopic }: TopicsScreenProps) {
   const [newName, setNewName] = useState("");
   const [newDesc, setNewDesc] = useState("");
   const [creating, setCreating] = useState(false);
+  // Subscription state
+  const [subscribed, setSubscribed] = useState<Record<string, boolean>>({});
+  const [toggling, setToggling] = useState<Record<string, boolean>>({});
 
   const fetchTopics = useCallback(async () => {
     try {
@@ -55,14 +60,68 @@ export default function TopicsScreen({ onSelectTopic }: TopicsScreenProps) {
     }
   }, []);
 
+  // Check subscription status for all topics
+  const fetchSubscriptions = useCallback(async () => {
+    if (!pushToken) return;
+    try {
+      const { data } = await supabase
+        .from("iot_subscribers")
+        .select("topic_id, active")
+        .eq("endpoint", pushToken)
+        .eq("type", "expo_push");
+      if (data) {
+        const subs: Record<string, boolean> = {};
+        for (const row of data) {
+          subs[row.topic_id] = row.active;
+        }
+        setSubscribed(subs);
+      }
+    } catch (e) {
+      console.log("Failed to fetch subscriptions:", e);
+    }
+  }, [pushToken]);
+
   useEffect(() => {
     fetchTopics();
   }, [fetchTopics]);
 
+  useEffect(() => {
+    if (pushToken && topics.length > 0) {
+      fetchSubscriptions();
+    }
+  }, [pushToken, topics, fetchSubscriptions]);
+
   const onRefresh = async () => {
     setRefreshing(true);
     await fetchTopics();
+    await fetchSubscriptions();
     setRefreshing(false);
+  };
+
+  const toggleSubscription = async (topicId: string) => {
+    if (!pushToken) {
+      Alert.alert("Push Not Available", "Push notifications are not available on this device.");
+      return;
+    }
+
+    setToggling((prev) => ({ ...prev, [topicId]: true }));
+
+    const isCurrentlySubscribed = subscribed[topicId];
+    let success: boolean;
+
+    if (isCurrentlySubscribed) {
+      success = await unsubscribePushToken(topicId, pushToken);
+    } else {
+      success = await subscribePushToken(topicId, pushToken);
+    }
+
+    if (success) {
+      setSubscribed((prev) => ({ ...prev, [topicId]: !isCurrentlySubscribed }));
+    } else {
+      Alert.alert("Error", `Failed to ${isCurrentlySubscribed ? "unsubscribe from" : "subscribe to"} topic.`);
+    }
+
+    setToggling((prev) => ({ ...prev, [topicId]: false }));
   };
 
   const createTopic = async () => {
@@ -167,6 +226,26 @@ export default function TopicsScreen({ onSelectTopic }: TopicsScreenProps) {
                     {messageCounts[item.id] ?? "—"} msg{(messageCounts[item.id] ?? 0) !== 1 ? "s" : ""}
                   </Text>
                 </View>
+                {/* Subscribe Bell Button */}
+                {pushToken && (
+                  <TouchableOpacity
+                    style={styles.bellButton}
+                    onPress={() => toggleSubscription(item.id)}
+                    disabled={toggling[item.id]}
+                    activeOpacity={0.6}
+                  >
+                    {toggling[item.id] ? (
+                      <ActivityIndicator size="small" color="#f97316" />
+                    ) : (
+                      <Text style={[
+                        styles.bellIcon,
+                        subscribed[item.id] ? styles.bellSubscribed : styles.bellUnsubscribed,
+                      ]}>
+                        {subscribed[item.id] ? "🔔" : "🔕"}
+                      </Text>
+                    )}
+                  </TouchableOpacity>
+                )}
               </View>
             </View>
             {item.description && (
@@ -263,6 +342,23 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   countText: { color: "#9ca3af", fontSize: 12, fontWeight: "500" },
+  bellButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "#1f2937",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  bellIcon: {
+    fontSize: 18,
+  },
+  bellSubscribed: {
+    opacity: 1,
+  },
+  bellUnsubscribed: {
+    opacity: 0.5,
+  },
   topicDesc: { color: "#9ca3af", fontSize: 14, marginTop: 4 },
   topicEndpoint: { color: "#6b7280", fontSize: 12, fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace", marginTop: 8 },
   empty: { flex: 1, alignItems: "center", justifyContent: "center", paddingTop: 80 },
