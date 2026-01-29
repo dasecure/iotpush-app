@@ -11,6 +11,7 @@ import {
   Modal,
   ActivityIndicator,
   Platform,
+  KeyboardAvoidingView,
 } from "react-native";
 import { supabase } from "../lib/supabase";
 import { subscribePushToken, unsubscribePushToken } from "../lib/notifications";
@@ -260,7 +261,10 @@ export default function TopicsScreen({ onSelectTopic, pushToken }: TopicsScreenP
 
       {/* Create Modal */}
       <Modal visible={showCreate} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
+        <KeyboardAvoidingView
+          style={styles.modalOverlay}
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+        >
           <View style={styles.modal}>
             <Text style={styles.modalTitle}>New Topic</Text>
 
@@ -298,7 +302,7 @@ export default function TopicsScreen({ onSelectTopic, pushToken }: TopicsScreenP
               </TouchableOpacity>
             </View>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
     </View>
   );
