@@ -1,5 +1,29 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, ErrorInfo } from "react";
 import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator } from "react-native";
+
+class ErrorBoundary extends React.Component<{children: React.ReactNode}, {hasError: boolean, error: string}> {
+  constructor(props: {children: React.ReactNode}) {
+    super(props);
+    this.state = { hasError: false, error: "" };
+  }
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error: error.message };
+  }
+  componentDidCatch(error: Error, info: ErrorInfo) {
+    console.error("App crash:", error, info);
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <View style={{flex:1,backgroundColor:"#030712",justifyContent:"center",alignItems:"center",padding:20}}>
+          <Text style={{color:"#f97316",fontSize:24,fontWeight:"bold",marginBottom:12}}>Something went wrong</Text>
+          <Text style={{color:"#9ca3af",textAlign:"center"}}>{this.state.error}</Text>
+        </View>
+      );
+    }
+    return this.props.children;
+  }
+}
 import { StatusBar } from "expo-status-bar";
 import { supabase } from "./src/lib/supabase";
 import { registerForPushNotifications, addNotificationReceivedListener, addNotificationResponseListener } from "./src/lib/notifications";
@@ -127,6 +151,7 @@ export default function App() {
 
   // Main app with tab bar
   return (
+    <ErrorBoundary>
     <View style={styles.mainContainer}>
       <StatusBar style="light" />
 
@@ -169,6 +194,7 @@ export default function App() {
         />
       </View>
     </View>
+    </ErrorBoundary>
   );
 }
 
