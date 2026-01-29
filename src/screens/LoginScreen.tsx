@@ -31,17 +31,22 @@ export default function LoginScreen({ onLogin, onSignup }: LoginScreenProps) {
     setLoading(true);
     setError("");
 
-    const { error: authError } = await supabase.auth.signInWithPassword({
-      email: email.trim(),
-      password,
-    });
+    try {
+      const { error: authError } = await supabase.auth.signInWithPassword({
+        email: email.trim(),
+        password,
+      });
 
-    setLoading(false);
+      setLoading(false);
 
-    if (authError) {
-      setError(authError.message);
-    } else {
-      onLogin();
+      if (authError) {
+        setError(authError.message);
+      } else {
+        onLogin();
+      }
+    } catch (e: any) {
+      setLoading(false);
+      setError(e?.message || "Login failed. Please try again.");
     }
   };
 
@@ -128,7 +133,6 @@ const styles = StyleSheet.create({
     marginBottom: 40,
   },
   form: {
-    gap: 12,
   },
   input: {
     backgroundColor: "#111827",
@@ -138,6 +142,7 @@ const styles = StyleSheet.create({
     padding: 16,
     fontSize: 16,
     color: "#fff",
+    marginBottom: 12,
   },
   button: {
     backgroundColor: "#f97316",

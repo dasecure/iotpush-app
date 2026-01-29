@@ -48,56 +48,93 @@ export default function App() {
   const [pushToken, setPushToken] = useState<string | null>(null);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session: s } }) => {
-      setSession(s);
+    try {
+      supabase.auth.getSession().then(({ data: { session: s } }) => {
+        setSession(s);
+        setLoading(false);
+        if (s) setScreen("main");
+      }).catch((err) => {
+        console.error("getSession error:", err);
+        setLoading(false);
+      });
+    } catch (err) {
+      console.error("getSession sync error:", err);
       setLoading(false);
-      if (s) setScreen("main");
-    }).catch(() => setLoading(false));
+    }
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, s) => {
-      setSession(s);
-      if (s) {
-        setScreen("main");
-      } else {
-        setScreen("login");
-        setActiveTab("topics");
-      }
-    });
+    let subscription: { unsubscribe: () => void } | undefined;
+    try {
+      const { data: { subscription: sub } } = supabase.auth.onAuthStateChange((_event, s) => {
+        setSession(s);
+        if (s) {
+          setScreen("main");
+        } else {
+          setScreen("login");
+          setActiveTab("topics");
+        }
+      });
+      subscription = sub;
+    } catch (err) {
+      console.error("onAuthStateChange error:", err);
+    }
 
-    return () => subscription.unsubscribe();
+    return () => {
+      try {
+        subscription?.unsubscribe();
+      } catch (_) {}
+    };
   }, []);
 
   // Register for push notifications when logged in
   useEffect(() => {
     if (session) {
-      registerForPushNotifications().then((token) => {
-        if (token) {
-          setPushToken(token);
-          console.log("Push token:", token);
-        }
-      });
+      let receivedSub: { remove: () => void } | undefined;
+      let responseSub: { remove: () => void } | undefined;
 
-      const receivedSub = addNotificationReceivedListener((notification) => {
-        console.log("Notification received:", notification);
-      });
+      try {
+        registerForPushNotifications().then((token) => {
+          if (token) {
+            setPushToken(token);
+            console.log("Push token:", token);
+          }
+        }).catch((err) => {
+          console.log("Push registration failed:", err);
+        });
+      } catch (err) {
+        console.log("Push registration sync error:", err);
+      }
 
-      const responseSub = addNotificationResponseListener((response) => {
-        console.log("Notification tapped:", response);
-      });
+      try {
+        receivedSub = addNotificationReceivedListener((notification) => {
+          console.log("Notification received:", notification);
+        });
+      } catch (err) {
+        console.log("Notification received listener error:", err);
+      }
+
+      try {
+        responseSub = addNotificationResponseListener((response) => {
+          console.log("Notification tapped:", response);
+        });
+      } catch (err) {
+        console.log("Notification response listener error:", err);
+      }
 
       return () => {
-        receivedSub.remove();
-        responseSub.remove();
+        try { receivedSub?.remove(); } catch (_) {}
+        try { responseSub?.remove(); } catch (_) {}
       };
     }
   }, [session]);
 
   if (loading) {
     return (
-      <View style={styles.loadingContainer}>
-        <StatusBar style="light" />
-        <ActivityIndicator size="large" color="#f97316" />
-      </View>
+      <ErrorBoundary>
+        <View style={styles.loadingContainer}>
+          <StatusBar style="light" />
+          <ActivityIndicator size="large" color="#f97316" />
+        </View>
+      </ErrorBoundary>
     );
   }
 
@@ -114,38 +151,38 @@ export default function App() {
   // Auth screens
   if (screen === "login") {
     return (
-      <>
+      <ErrorBoundary>
         <StatusBar style="light" />
         <LoginScreen
           onLogin={() => setScreen("main")}
           onSignup={() => setScreen("signup")}
         />
-      </>
+      </ErrorBoundary>
     );
   }
 
   if (screen === "signup") {
     return (
-      <>
+      <ErrorBoundary>
         <StatusBar style="light" />
         <SignupScreen
           onSignup={() => setScreen("main")}
           onLogin={() => setScreen("login")}
         />
-      </>
+      </ErrorBoundary>
     );
   }
 
   // Messages detail screen (on top of tabs)
   if (screen === "messages" && selectedTopic) {
     return (
-      <>
+      <ErrorBoundary>
         <StatusBar style="light" />
         <MessagesScreen
           topic={selectedTopic}
           onBack={() => setScreen("main")}
         />
-      </>
+      </ErrorBoundary>
     );
   }
 

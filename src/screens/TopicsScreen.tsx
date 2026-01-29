@@ -321,7 +321,7 @@ const styles = StyleSheet.create({
   subtitle: { fontSize: 14, color: "#6b7280", marginTop: 2 },
   addButton: { backgroundColor: "#f97316", paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8 },
   addButtonText: { color: "#000", fontWeight: "600", fontSize: 14 },
-  list: { padding: 16, gap: 12 },
+  list: { padding: 16 },
   topicCard: {
     backgroundColor: "#111827",
     borderWidth: 1,
@@ -332,7 +332,7 @@ const styles = StyleSheet.create({
   },
   topicHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   topicName: { fontSize: 18, fontWeight: "600", color: "#fff", flex: 1 },
-  topicMeta: { flexDirection: "row", alignItems: "center", gap: 8 },
+  topicMeta: { flexDirection: "row", alignItems: "center" },
   privateBadge: { marginRight: 4 },
   privateBadgeText: { fontSize: 14 },
   countBadge: {
@@ -340,6 +340,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 3,
     borderRadius: 8,
+    marginRight: 8,
   },
   countText: { color: "#9ca3af", fontSize: 12, fontWeight: "500" },
   bellButton: {
@@ -371,8 +372,8 @@ const styles = StyleSheet.create({
   modal: { backgroundColor: "#111827", borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 24, paddingBottom: 40 },
   modalTitle: { fontSize: 20, fontWeight: "bold", color: "#fff", marginBottom: 16 },
   input: { backgroundColor: "#030712", borderWidth: 1, borderColor: "#374151", borderRadius: 12, padding: 16, fontSize: 16, color: "#fff", marginBottom: 12 },
-  modalActions: { flexDirection: "row", gap: 12, marginTop: 8 },
-  cancelButton: { flex: 1, borderWidth: 1, borderColor: "#374151", borderRadius: 12, padding: 14, alignItems: "center" },
+  modalActions: { flexDirection: "row", marginTop: 8 },
+  cancelButton: { flex: 1, borderWidth: 1, borderColor: "#374151", borderRadius: 12, padding: 14, alignItems: "center", marginRight: 12 },
   cancelButtonText: { color: "#9ca3af", fontWeight: "600" },
   createButton: { flex: 1, backgroundColor: "#f97316", borderRadius: 12, padding: 14, alignItems: "center" },
   createButtonText: { color: "#000", fontWeight: "600" },

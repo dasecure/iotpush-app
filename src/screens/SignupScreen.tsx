@@ -35,17 +35,22 @@ export default function SignupScreen({ onSignup, onLogin }: SignupScreenProps) {
     setLoading(true);
     setError("");
 
-    const { error: authError } = await supabase.auth.signUp({
-      email: email.trim(),
-      password,
-    });
+    try {
+      const { error: authError } = await supabase.auth.signUp({
+        email: email.trim(),
+        password,
+      });
 
-    setLoading(false);
+      setLoading(false);
 
-    if (authError) {
-      setError(authError.message);
-    } else {
-      onSignup();
+      if (authError) {
+        setError(authError.message);
+      } else {
+        onSignup();
+      }
+    } catch (e: any) {
+      setLoading(false);
+      setError(e?.message || "Signup failed. Please try again.");
     }
   };
 
@@ -111,8 +116,8 @@ const styles = StyleSheet.create({
   logo: { fontSize: 40, fontWeight: "bold", color: "#fff", textAlign: "center", marginBottom: 8 },
   logoAccent: { color: "#f97316" },
   subtitle: { fontSize: 16, color: "#9ca3af", textAlign: "center", marginBottom: 40 },
-  form: { gap: 12 },
-  input: { backgroundColor: "#111827", borderWidth: 1, borderColor: "#374151", borderRadius: 12, padding: 16, fontSize: 16, color: "#fff" },
+  form: { },
+  input: { backgroundColor: "#111827", borderWidth: 1, borderColor: "#374151", borderRadius: 12, padding: 16, fontSize: 16, color: "#fff", marginBottom: 12 },
   button: { backgroundColor: "#f97316", borderRadius: 12, padding: 16, alignItems: "center", marginTop: 8 },
   buttonText: { color: "#000", fontSize: 16, fontWeight: "600" },
   error: { color: "#ef4444", fontSize: 14, textAlign: "center" },
