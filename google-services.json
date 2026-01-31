@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "816380625146",
+    "project_id": "da-23e87",
+    "storage_bucket": "da-23e87.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:816380625146:android:84c9c6fb24142dcd73c943",
+        "android_client_info": {
+          "package_name": "com.dasecure.iotpush"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCvv9IOAUTXKAGy4mLSXFCDJvpwx51gqjk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
