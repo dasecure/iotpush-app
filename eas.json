@@ -6,7 +6,8 @@
     "base": {
       "node": "18.20.4",
       "env": {
-        "NPM_CONFIG_LEGACY_PEER_DEPS": "true"
+        "NPM_CONFIG_LEGACY_PEER_DEPS": "true",
+        "ORG_GRADLE_PROJECT_newArchEnabled": "false"
       },
       "cache": {
         "disabled": true
