@@ -85,10 +85,10 @@ This app receives push notifications from IoT devices and servers via the iotpus
 4. To trigger a live notification, run this curl command:
 
 ```
-curl -X POST https://www.iotpush.com/api/send \
+curl -X POST https://www.iotpush.com/api/push/demo-alerts \
   -H "Content-Type: application/json" \
-  -H "x-api-key: DEMO_API_KEY" \
-  -d '{"topic":"demo-alerts","title":"Test Alert","body":"This is a test notification from App Review"}'
+  -H "x-api-key: demo_ac7a77a9ae74448461a047bc0f2cc1a6" \
+  -d '{"title":"Test Alert","message":"This is a test notification from App Review"}'
 ```
 
 5. A push notification should appear on the device
@@ -96,8 +96,9 @@ curl -X POST https://www.iotpush.com/api/send \
 
 ### Demo Account
 - **Email:** review@iotpush.com
-- **Password:** (Vincent to create this)
-- **API Key:** (generate from demo account)
+- **Password:** AppReview2026!
+- **API Key:** demo_ac7a77a9ae74448461a047bc0f2cc1a6
+- **Demo Topic:** demo-alerts (pre-loaded with 4 sample messages)
 
 ### Contact
 - **First Name:** Vincent
