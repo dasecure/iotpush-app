@@ -24,10 +24,18 @@ export default function AllMessagesScreen({ onSelectTopic }: AllMessagesScreenPr
 
   const fetchData = useCallback(async () => {
     try {
+      // Get current user
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        setLoading(false);
+        return;
+      }
+
       // Fetch user's topics first
       const { data: topicsData } = await supabase
         .from("iot_topics")
-        .select("*");
+        .select("*")
+        .eq("user_id", user.id);
       
       if (!topicsData || topicsData.length === 0) {
         setTopics({});

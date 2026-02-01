@@ -37,9 +37,17 @@ export default function TopicsScreen({ onSelectTopic, pushToken }: TopicsScreenP
 
   const fetchTopics = useCallback(async () => {
     try {
+      // Get current user
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        setLoading(false);
+        return;
+      }
+
       const { data } = await supabase
         .from("iot_topics")
         .select("*")
+        .eq("user_id", user.id)
         .order("created_at", { ascending: false });
       if (data) {
         setTopics(data);
