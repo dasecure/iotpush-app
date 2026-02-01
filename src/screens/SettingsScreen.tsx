@@ -9,6 +9,7 @@ import {
   Platform,
 } from "react-native";
 import * as Clipboard from "expo-clipboard";
+import Constants from "expo-constants";
 import { supabase } from "../lib/supabase";
 
 interface SettingsScreenProps {
@@ -95,7 +96,11 @@ export default function SettingsScreen({ userEmail, pushToken, onLogout }: Setti
         <View style={styles.card}>
           <View style={styles.row}>
             <Text style={styles.label}>App Version</Text>
-            <Text style={styles.value}>1.0.0</Text>
+            <Text style={styles.value}>{Constants.expoConfig?.version || "1.0.0"}</Text>
+          </View>
+          <View style={[styles.row, { marginTop: 12 }]}>
+            <Text style={styles.label}>Build</Text>
+            <Text style={styles.value}>{Constants.expoConfig?.ios?.buildNumber || Constants.expoConfig?.android?.versionCode || "-"}</Text>
           </View>
           <View style={[styles.row, { marginTop: 12 }]}>
             <Text style={styles.label}>Platform</Text>

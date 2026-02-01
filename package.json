@@ -6,13 +6,17 @@
     "start": "expo start",
     "android": "expo start --android",
     "ios": "expo start --ios",
-    "web": "expo start --web"
+    "web": "expo start --web",
+    "version:patch": "node scripts/bump-version.js patch",
+    "version:minor": "node scripts/bump-version.js minor",
+    "version:major": "node scripts/bump-version.js major"
   },
   "dependencies": {
     "@react-native-async-storage/async-storage": "^2.2.0",
     "@supabase/supabase-js": "^2.93.2",
     "expo": "~54.0.33",
     "expo-clipboard": "~8.0.8",
+    "expo-constants": "^18.0.13",
     "expo-dev-client": "~6.0.17",
     "expo-device": "~8.0.10",
     "expo-notifications": "~0.32.16",
