@@ -4,9 +4,12 @@
   },
   "build": {
     "base": {
-      "node": "22.12.0",
+      "node": "18.20.4",
       "env": {
         "NPM_CONFIG_LEGACY_PEER_DEPS": "true"
+      },
+      "cache": {
+        "disabled": true
       }
     },
     "development": {
