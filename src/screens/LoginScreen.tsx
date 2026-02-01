@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
+  Image,
 } from "react-native";
 import { supabase } from "../lib/supabase";
 
@@ -56,9 +57,16 @@ export default function LoginScreen({ onLogin, onSignup }: LoginScreenProps) {
       behavior={Platform.OS === "ios" ? "padding" : "height"}
     >
       <View style={styles.content}>
-        <Text style={styles.logo}>
-          iot<Text style={styles.logoAccent}>push</Text>
-        </Text>
+        <View style={styles.logoContainer}>
+          <Image
+            source={require("../../assets/icon.png")}
+            style={styles.logoImage}
+          />
+          <View style={styles.titleContainer}>
+            <Text style={styles.titlePrefix}>iot</Text>
+            <Text style={styles.titleAccent}>push</Text>
+          </View>
+        </View>
         <Text style={styles.subtitle}>Push notifications for your devices</Text>
 
         <View style={styles.form}>
@@ -116,15 +124,36 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     padding: 24,
   },
-  logo: {
-    fontSize: 40,
-    fontWeight: "bold",
-    color: "#fff",
-    textAlign: "center",
-    marginBottom: 8,
+  logoContainer: {
+    alignItems: "center",
+    marginBottom: 32,
   },
-  logoAccent: {
+  logoImage: {
+    width: 120,
+    height: 120,
+    borderRadius: 24,
+    marginBottom: 16,
+    shadowColor: "#f97316",
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.3,
+    shadowRadius: 15,
+    elevation: 10,
+  },
+  titleContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  titlePrefix: {
+    fontSize: 32,
+    fontWeight: "300",
+    color: "#fff",
+    letterSpacing: 1,
+  },
+  titleAccent: {
+    fontSize: 32,
+    fontWeight: "800",
     color: "#f97316",
+    letterSpacing: 1,
   },
   subtitle: {
     fontSize: 16,

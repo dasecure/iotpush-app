@@ -28,6 +28,7 @@ import { StatusBar } from "expo-status-bar";
 import { supabase } from "./src/lib/supabase";
 import { registerForPushNotifications, addNotificationReceivedListener, addNotificationResponseListener } from "./src/lib/notifications";
 import { Topic } from "./src/lib/types";
+import SplashScreenComponent from "./src/screens/SplashScreen";
 import LoginScreen from "./src/screens/LoginScreen";
 import SignupScreen from "./src/screens/SignupScreen";
 import TopicsScreen from "./src/screens/TopicsScreen";
@@ -40,6 +41,7 @@ type Screen = "login" | "signup" | "main" | "messages";
 type Tab = "topics" | "inbox" | "settings";
 
 export default function App() {
+  const [showSplash, setShowSplash] = useState(true);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const [screen, setScreen] = useState<Screen>("login");
@@ -126,6 +128,16 @@ export default function App() {
       };
     }
   }, [session]);
+
+  // Splash screen
+  if (showSplash) {
+    return (
+      <ErrorBoundary>
+        <StatusBar style="light" />
+        <SplashScreenComponent onFinish={() => setShowSplash(false)} />
+      </ErrorBoundary>
+    );
+  }
 
   if (loading) {
     return (
