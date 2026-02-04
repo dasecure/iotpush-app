@@ -34,6 +34,64 @@ export default function SettingsScreen({ userEmail, pushToken, onLogout }: Setti
     ]);
   };
 
+  const handleDeleteAccount = () => {
+    Alert.alert(
+      "Delete Account",
+      "This will permanently delete your account and all associated data including topics, subscriptions, and messages. This action cannot be undone.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: () => confirmDeleteAccount(),
+        },
+      ]
+    );
+  };
+
+  const confirmDeleteAccount = () => {
+    Alert.alert(
+      "Are you absolutely sure?",
+      "Type DELETE to confirm account deletion.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete My Account",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              const { data: { session } } = await supabase.auth.getSession();
+              if (!session) {
+                Alert.alert("Error", "Not authenticated");
+                return;
+              }
+
+              const response = await fetch("https://www.iotpush.com/api/account/delete", {
+                method: "DELETE",
+                headers: {
+                  "Content-Type": "application/json",
+                  "Authorization": `Bearer ${session.access_token}`,
+                },
+              });
+
+              const result = await response.json();
+
+              if (response.ok && result.success) {
+                await supabase.auth.signOut();
+                Alert.alert("Account Deleted", "Your account has been permanently deleted.");
+                onLogout();
+              } else {
+                Alert.alert("Error", result.error || "Failed to delete account. Please try again.");
+              }
+            } catch (error) {
+              Alert.alert("Error", "Failed to delete account. Please try again.");
+            }
+          },
+        },
+      ]
+    );
+  };
+
   const copyToClipboard = (text: string, label: string) => {
     Clipboard.setStringAsync(text);
     Alert.alert("Copied!", `${label} copied to clipboard`);
@@ -113,6 +171,15 @@ export default function SettingsScreen({ userEmail, pushToken, onLogout }: Setti
           <Text style={styles.logoutText}>Log Out</Text>
         </TouchableOpacity>
 
+        {/* Delete Account */}
+        <Text style={styles.sectionTitle}>Danger Zone</Text>
+        <TouchableOpacity style={styles.deleteButton} onPress={handleDeleteAccount}>
+          <Text style={styles.deleteText}>Delete Account</Text>
+        </TouchableOpacity>
+        <Text style={styles.deleteHint}>
+          Permanently delete your account and all data
+        </Text>
+
         <View style={{ height: 40 }} />
       </ScrollView>
     </View>
@@ -191,4 +258,20 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   logoutText: { color: "#ef4444", fontSize: 16, fontWeight: "600" },
+  deleteButton: {
+    marginTop: 8,
+    backgroundColor: "#7f1d1d",
+    borderWidth: 1,
+    borderColor: "#dc2626",
+    borderRadius: 12,
+    padding: 16,
+    alignItems: "center",
+  },
+  deleteText: { color: "#fca5a5", fontSize: 16, fontWeight: "600" },
+  deleteHint: {
+    color: "#6b7280",
+    fontSize: 12,
+    textAlign: "center",
+    marginTop: 8,
+  },
 });
