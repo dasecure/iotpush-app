@@ -16,6 +16,7 @@
       "supportsTablet": false,
       "bundleIdentifier": "com.dasecure.iotpush",
       "buildNumber": "8",
+      "icon": "./assets/icon.png",
       "infoPlist": {
         "NSAppTransportSecurity": {
           "NSAllowsArbitraryLoads": false
@@ -32,7 +33,13 @@
       "googleServicesFile": "./google-services.json"
     },
     "plugins": [
-      "expo-notifications"
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/icon.png",
+          "color": "#030712"
+        }
+      ]
     ],
     "extra": {
       "eas": {
