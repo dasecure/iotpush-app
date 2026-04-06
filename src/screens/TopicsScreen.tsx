@@ -149,7 +149,11 @@ export default function TopicsScreen({ onSelectTopic, onSubscribe, pushToken }: 
       });
 
       if (error) {
-        Alert.alert("Error", error.message);
+        if (error.code === "23505") {
+          Alert.alert("Topic Exists", `A topic named "${newName.trim().toLowerCase().replace(/[^a-z0-9-]/g, "-")}" already exists. Choose a different name.`);
+        } else {
+          Alert.alert("Error", error.message);
+        }
       } else {
         setNewName("");
         setNewDesc("");
