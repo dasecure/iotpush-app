@@ -10,7 +10,7 @@ try {
   AsyncStorage = require("@react-native-async-storage/async-storage").default;
 } catch {}
 
-const API_BASE = "https://iotpush.com/api";
+const API_BASE = "https://www.iotpush.com/api";
 
 // ─── Configure notification behavior ───
 try {
@@ -104,8 +104,19 @@ export function setOnNotificationTap(
 // ─── Get auth token for API calls ───
 async function getAccessToken(): Promise<string | null> {
   try {
-    const { data: { session } } = await supabase.auth.getSession();
-    return session?.access_token || null;
+    // First try to refresh the session to get a valid token
+    const { data: { session }, error } = await supabase.auth.getSession();
+    if (error || !session) return null;
+    
+    // Check if token is close to expiry (within 60 seconds)
+    const expiresAt = session.expires_at || 0;
+    const now = Math.floor(Date.now() / 1000);
+    if (expiresAt - now < 60) {
+      const { data: refreshed } = await supabase.auth.refreshSession();
+      return refreshed.session?.access_token || session.access_token;
+    }
+    
+    return session.access_token;
   } catch {
     return null;
   }
