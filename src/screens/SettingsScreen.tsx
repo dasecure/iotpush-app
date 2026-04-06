@@ -158,7 +158,7 @@ export default function SettingsScreen({ userEmail, pushToken, onLogout }: Setti
           </View>
           <View style={[styles.row, { marginTop: 12 }]}>
             <Text style={styles.label}>Build</Text>
-            <Text style={styles.value}>{Constants.expoConfig?.ios?.buildNumber || Constants.expoConfig?.android?.versionCode || "-"}</Text>
+            <Text style={styles.value}>{Constants.nativeBuildVersion || Constants.expoConfig?.ios?.buildNumber || Constants.expoConfig?.android?.versionCode || "-"}</Text>
           </View>
           <View style={[styles.row, { marginTop: 12 }]}>
             <Text style={styles.label}>Platform</Text>
