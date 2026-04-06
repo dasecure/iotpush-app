@@ -1,0 +1,192 @@
+name: Build & Submit
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - "**.md"
+      - ".gitignore"
+      - "scripts/**"
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: "Platform to build"
+        required: true
+        default: "all"
+        type: choice
+        options:
+          - all
+          - ios
+          - android
+      profile:
+        description: "Build profile"
+        required: true
+        default: "production"
+        type: choice
+        options:
+          - preview
+          - production
+      submit:
+        description: "Submit to stores after build"
+        required: false
+        default: true
+        type: boolean
+
+env:
+  EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+
+jobs:
+  # ─── Lint & Type Check ───
+  quality:
+    name: Quality checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+
+      - name: Type check
+        run: npx tsc --noEmit
+
+  # ─── iOS Build ───
+  build-ios:
+    name: Build iOS
+    needs: quality
+    if: >
+      github.event_name == 'push' ||
+      github.event.inputs.platform == 'all' ||
+      github.event.inputs.platform == 'ios'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Setup EAS CLI
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+
+      - name: Determine build profile
+        id: profile
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "profile=${{ github.event.inputs.profile }}" >> $GITHUB_OUTPUT
+          else
+            echo "profile=production" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Build iOS
+        run: eas build --platform ios --profile ${{ steps.profile.outputs.profile }} --non-interactive --no-wait
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+
+  # ─── Android Build ───
+  build-android:
+    name: Build Android
+    needs: quality
+    if: >
+      github.event_name == 'push' ||
+      github.event.inputs.platform == 'all' ||
+      github.event.inputs.platform == 'android'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Setup EAS CLI
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+
+      - name: Determine build profile
+        id: profile
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "profile=${{ github.event.inputs.profile }}" >> $GITHUB_OUTPUT
+          else
+            echo "profile=production" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Build Android
+        run: eas build --platform android --profile ${{ steps.profile.outputs.profile }} --non-interactive --no-wait
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+
+  # ─── Submit iOS to TestFlight / App Store ───
+  submit-ios:
+    name: Submit iOS to App Store Connect
+    needs: build-ios
+    if: >
+      (github.event_name == 'push') ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.submit == 'true' &&
+       (github.event.inputs.platform == 'all' || github.event.inputs.platform == 'ios'))
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Setup EAS CLI
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+
+      - name: Submit latest iOS build
+        run: eas submit --platform ios --latest --non-interactive
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+
+  # ─── Notify on completion ───
+  notify:
+    name: Send notification
+    needs: [build-ios, build-android]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Notify via IOTPush
+        run: |
+          IOS_STATUS="${{ needs.build-ios.result }}"
+          ANDROID_STATUS="${{ needs.build-android.result }}"
+
+          if [ "$IOS_STATUS" = "success" ] && [ "$ANDROID_STATUS" = "success" ]; then
+            TITLE="✅ Mobile builds complete"
+            MSG="iOS and Android builds succeeded for ${{ github.sha }}. iOS submit to TestFlight triggered."
+            PRIORITY="normal"
+          else
+            TITLE="⚠️ Mobile build issue"
+            MSG="iOS: ${IOS_STATUS}, Android: ${ANDROID_STATUS} for ${{ github.sha }}"
+            PRIORITY="high"
+          fi
+
+          curl -s -X POST "https://iotpush.com/api/push/claude" \
+            -H "Content-Type: application/json" \
+            -d "{\"message\": \"${MSG}\", \"title\": \"${TITLE}\", \"priority\": \"${PRIORITY}\", \"tags\": [\"ci\", \"mobile\"]}"
