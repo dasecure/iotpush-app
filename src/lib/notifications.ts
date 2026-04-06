@@ -49,7 +49,13 @@ if (Platform.OS === "android") {
 // ─── Register static notification action categories at startup ───
 // These must be registered BEFORE any notification arrives so iOS/Android
 // can show the action buttons on the lock screen and notification shade.
+//
+// The server maps each push's actions array to one of these category IDs.
+// You can use ANY action ids/labels in your push — the in-app buttons
+// render dynamically. These static categories only affect the OS-level
+// notification buttons (long-press on iOS, expand on Android).
 const STATIC_CATEGORIES = [
+  // Single actions
   {
     id: "iotpush_ack",
     actions: [
@@ -57,18 +63,17 @@ const STATIC_CATEGORIES = [
     ],
   },
   {
+    id: "iotpush_reply_only",
+    actions: [
+      { identifier: "reply", buttonTitle: "Reply", options: { opensAppToForeground: true, isDestructive: false, isAuthenticationRequired: false }, textInput: { submitButtonTitle: "Send", placeholder: "Type your reply..." } },
+    ],
+  },
+  // Two actions
+  {
     id: "iotpush_ack_snooze",
     actions: [
       { identifier: "ack", buttonTitle: "Acknowledge", options: { opensAppToForeground: true, isDestructive: false, isAuthenticationRequired: false } },
       { identifier: "snooze", buttonTitle: "Snooze 5m", options: { opensAppToForeground: false, isDestructive: false, isAuthenticationRequired: false } },
-    ],
-  },
-  {
-    id: "iotpush_ack_snooze_reply",
-    actions: [
-      { identifier: "ack", buttonTitle: "Acknowledge", options: { opensAppToForeground: true, isDestructive: false, isAuthenticationRequired: false } },
-      { identifier: "snooze", buttonTitle: "Snooze 5m", options: { opensAppToForeground: false, isDestructive: false, isAuthenticationRequired: false } },
-      { identifier: "reply", buttonTitle: "Reply", options: { opensAppToForeground: true, isDestructive: false, isAuthenticationRequired: false }, textInput: { submitButtonTitle: "Send", placeholder: "Type your reply..." } },
     ],
   },
   {
@@ -79,8 +84,48 @@ const STATIC_CATEGORIES = [
     ],
   },
   {
-    id: "iotpush_reply_only",
+    id: "iotpush_approve_reject",
     actions: [
+      { identifier: "approve", buttonTitle: "Approve", options: { opensAppToForeground: true, isDestructive: false, isAuthenticationRequired: false } },
+      { identifier: "reject", buttonTitle: "Reject", options: { opensAppToForeground: true, isDestructive: true, isAuthenticationRequired: false } },
+    ],
+  },
+  {
+    id: "iotpush_yes_no",
+    actions: [
+      { identifier: "yes", buttonTitle: "Yes", options: { opensAppToForeground: true, isDestructive: false, isAuthenticationRequired: false } },
+      { identifier: "no", buttonTitle: "No", options: { opensAppToForeground: true, isDestructive: false, isAuthenticationRequired: false } },
+    ],
+  },
+  {
+    id: "iotpush_open_dismiss",
+    actions: [
+      { identifier: "open", buttonTitle: "Open", options: { opensAppToForeground: true, isDestructive: false, isAuthenticationRequired: false } },
+      { identifier: "dismiss", buttonTitle: "Dismiss", options: { opensAppToForeground: false, isDestructive: false, isAuthenticationRequired: false } },
+    ],
+  },
+  // Three actions
+  {
+    id: "iotpush_ack_snooze_reply",
+    actions: [
+      { identifier: "ack", buttonTitle: "Acknowledge", options: { opensAppToForeground: true, isDestructive: false, isAuthenticationRequired: false } },
+      { identifier: "snooze", buttonTitle: "Snooze 5m", options: { opensAppToForeground: false, isDestructive: false, isAuthenticationRequired: false } },
+      { identifier: "reply", buttonTitle: "Reply", options: { opensAppToForeground: true, isDestructive: false, isAuthenticationRequired: false }, textInput: { submitButtonTitle: "Send", placeholder: "Type your reply..." } },
+    ],
+  },
+  {
+    id: "iotpush_approve_reject_comment",
+    actions: [
+      { identifier: "approve", buttonTitle: "Approve", options: { opensAppToForeground: true, isDestructive: false, isAuthenticationRequired: false } },
+      { identifier: "reject", buttonTitle: "Reject", options: { opensAppToForeground: true, isDestructive: true, isAuthenticationRequired: false } },
+      { identifier: "comment", buttonTitle: "Comment", options: { opensAppToForeground: true, isDestructive: false, isAuthenticationRequired: false }, textInput: { submitButtonTitle: "Send", placeholder: "Add a comment..." } },
+    ],
+  },
+  {
+    id: "iotpush_ack_escalate_reply",
+    actions: [
+      { identifier: "ack", buttonTitle: "Acknowledge", options: { opensAppToForeground: true, isDestructive: false, isAuthenticationRequired: false } },
+      { identifier: "escalate", buttonTitle: "Escalate", options: { opensAppToForeground: true, isDestructive: true, isAuthenticationRequired: false } },
       { identifier: "reply", buttonTitle: "Reply", options: { opensAppToForeground: true, isDestructive: false, isAuthenticationRequired: false }, textInput: { submitButtonTitle: "Send", placeholder: "Type your reply..." } },
     ],
   },
