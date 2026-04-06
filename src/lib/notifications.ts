@@ -27,6 +27,27 @@ try {
   console.log("Failed to set notification handler:", e);
 }
 
+// ─── Create Android notification channels at startup (before auth) ───
+// This MUST happen before any notification arrives, otherwise Android
+// has no channel to route the notification to and it arrives silently.
+if (Platform.OS === "android") {
+  Notifications.setNotificationChannelAsync("default", {
+    name: "Default",
+    importance: Notifications.AndroidImportance.MAX,
+    vibrationPattern: [0, 250, 250, 250],
+    lightColor: "#f97316",
+    sound: "default",
+  }).catch((e) => console.log("Failed to create default channel:", e));
+
+  Notifications.setNotificationChannelAsync("high-priority", {
+    name: "High Priority",
+    importance: Notifications.AndroidImportance.MAX,
+    vibrationPattern: [0, 500, 250, 500],
+    lightColor: "#ef4444",
+    sound: "default",
+  }).catch((e) => console.log("Failed to create high-priority channel:", e));
+}
+
 // ─── Get auth token for API calls ───
 async function getAccessToken(): Promise<string | null> {
   try {
@@ -104,23 +125,6 @@ export async function registerForPushNotifications(): Promise<string | null> {
       return null;
     }
     const tokenData = await Notifications.getExpoPushTokenAsync({ projectId });
-
-    // Android notification channels
-    if (Platform.OS === "android") {
-      await Notifications.setNotificationChannelAsync("default", {
-        name: "Default",
-        importance: Notifications.AndroidImportance.MAX,
-        vibrationPattern: [0, 250, 250, 250],
-        lightColor: "#f97316",
-      });
-      await Notifications.setNotificationChannelAsync("high-priority", {
-        name: "High Priority",
-        importance: Notifications.AndroidImportance.MAX,
-        vibrationPattern: [0, 500, 250, 500],
-        lightColor: "#ef4444",
-        sound: "default",
-      });
-    }
 
     // Register device with IOTPush API (non-blocking)
     registerDeviceWithAPI(tokenData.data).catch((err) => {
