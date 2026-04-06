@@ -35,9 +35,10 @@ import TopicsScreen from "./src/screens/TopicsScreen";
 import MessagesScreen from "./src/screens/MessagesScreen";
 import AllMessagesScreen from "./src/screens/AllMessagesScreen";
 import SettingsScreen from "./src/screens/SettingsScreen";
+import SubscribeScreen from "./src/screens/SubscribeScreen";
 import { Session } from "@supabase/supabase-js";
 
-type Screen = "login" | "signup" | "main" | "messages";
+type Screen = "login" | "signup" | "main" | "messages" | "subscribe";
 type Tab = "topics" | "inbox" | "settings";
 
 export default function App() {
@@ -198,6 +199,19 @@ export default function App() {
     );
   }
 
+  // Subscribe screen
+  if (screen === "subscribe") {
+    return (
+      <ErrorBoundary>
+        <StatusBar style="light" />
+        <SubscribeScreen
+          onBack={() => setScreen("main")}
+          onSubscribed={() => setScreen("main")}
+        />
+      </ErrorBoundary>
+    );
+  }
+
   // Main app with tab bar
   return (
     <ErrorBoundary>
@@ -207,7 +221,7 @@ export default function App() {
       {/* Tab content */}
       <View style={styles.tabContent}>
         {activeTab === "topics" && (
-          <TopicsScreen onSelectTopic={handleSelectTopic} pushToken={pushToken} />
+          <TopicsScreen onSelectTopic={handleSelectTopic} onSubscribe={() => setScreen("subscribe")} pushToken={pushToken} />
         )}
         {activeTab === "inbox" && (
           <AllMessagesScreen onSelectTopic={handleSelectTopic} />

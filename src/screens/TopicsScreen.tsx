@@ -19,10 +19,11 @@ import { Topic } from "../lib/types";
 
 interface TopicsScreenProps {
   onSelectTopic: (topic: Topic) => void;
+  onSubscribe?: () => void;
   pushToken?: string | null;
 }
 
-export default function TopicsScreen({ onSelectTopic, pushToken }: TopicsScreenProps) {
+export default function TopicsScreen({ onSelectTopic, onSubscribe, pushToken }: TopicsScreenProps) {
   const [topics, setTopics] = useState<Topic[]>([]);
   const [messageCounts, setMessageCounts] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
@@ -194,9 +195,16 @@ export default function TopicsScreen({ onSelectTopic, pushToken }: TopicsScreenP
           </Text>
           <Text style={styles.subtitle}>{topics.length} topic{topics.length !== 1 ? "s" : ""}</Text>
         </View>
-        <TouchableOpacity style={styles.addButton} onPress={() => setShowCreate(true)}>
-          <Text style={styles.addButtonText}>+ New</Text>
-        </TouchableOpacity>
+        <View style={{ flexDirection: "row", gap: 8 }}>
+          {onSubscribe && (
+            <TouchableOpacity style={styles.subscribeHeaderBtn} onPress={onSubscribe}>
+              <Text style={styles.subscribeHeaderBtnText}>Subscribe</Text>
+            </TouchableOpacity>
+          )}
+          <TouchableOpacity style={styles.addButton} onPress={() => setShowCreate(true)}>
+            <Text style={styles.addButtonText}>+ New</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* Topics List */}
@@ -333,6 +341,8 @@ const styles = StyleSheet.create({
   subtitle: { fontSize: 14, color: "#6b7280", marginTop: 2 },
   addButton: { backgroundColor: "#f97316", paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8 },
   addButtonText: { color: "#000", fontWeight: "600", fontSize: 14 },
+  subscribeHeaderBtn: { borderWidth: 1, borderColor: "#f97316", paddingHorizontal: 14, paddingVertical: 8, borderRadius: 8 },
+  subscribeHeaderBtnText: { color: "#f97316", fontWeight: "600", fontSize: 14 },
   list: { padding: 16 },
   topicCard: {
     backgroundColor: "#111827",
