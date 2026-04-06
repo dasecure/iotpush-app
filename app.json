@@ -29,7 +29,7 @@
         "backgroundColor": "#030712"
       },
       "package": "com.dasecure.iotpush",
-      "versionCode": 7,
+      "versionCode": 9,
       "googleServicesFile": "./google-services.json"
     },
     "plugins": [
