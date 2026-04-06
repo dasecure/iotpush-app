@@ -28,8 +28,6 @@ try {
 }
 
 // ─── Create Android notification channels at startup (before auth) ───
-// This MUST happen before any notification arrives, otherwise Android
-// has no channel to route the notification to and it arrives silently.
 if (Platform.OS === "android") {
   Notifications.setNotificationChannelAsync("default", {
     name: "Default",
@@ -46,6 +44,61 @@ if (Platform.OS === "android") {
     lightColor: "#ef4444",
     sound: "default",
   }).catch((e) => console.log("Failed to create high-priority channel:", e));
+}
+
+// ─── Register static notification action categories at startup ───
+// These must be registered BEFORE any notification arrives so iOS/Android
+// can show the action buttons on the lock screen and notification shade.
+const STATIC_CATEGORIES = [
+  {
+    id: "iotpush_ack",
+    actions: [
+      { identifier: "ack", buttonTitle: "Acknowledge", options: { opensAppToForeground: true, isDestructive: false, isAuthenticationRequired: false } },
+    ],
+  },
+  {
+    id: "iotpush_ack_snooze",
+    actions: [
+      { identifier: "ack", buttonTitle: "Acknowledge", options: { opensAppToForeground: true, isDestructive: false, isAuthenticationRequired: false } },
+      { identifier: "snooze", buttonTitle: "Snooze 5m", options: { opensAppToForeground: false, isDestructive: false, isAuthenticationRequired: false } },
+    ],
+  },
+  {
+    id: "iotpush_ack_snooze_reply",
+    actions: [
+      { identifier: "ack", buttonTitle: "Acknowledge", options: { opensAppToForeground: true, isDestructive: false, isAuthenticationRequired: false } },
+      { identifier: "snooze", buttonTitle: "Snooze 5m", options: { opensAppToForeground: false, isDestructive: false, isAuthenticationRequired: false } },
+      { identifier: "reply", buttonTitle: "Reply", options: { opensAppToForeground: true, isDestructive: false, isAuthenticationRequired: false }, textInput: { submitButtonTitle: "Send", placeholder: "Type your reply..." } },
+    ],
+  },
+  {
+    id: "iotpush_confirm_deny",
+    actions: [
+      { identifier: "confirm", buttonTitle: "Confirm", options: { opensAppToForeground: true, isDestructive: false, isAuthenticationRequired: false } },
+      { identifier: "deny", buttonTitle: "Deny", options: { opensAppToForeground: true, isDestructive: true, isAuthenticationRequired: false } },
+    ],
+  },
+  {
+    id: "iotpush_reply_only",
+    actions: [
+      { identifier: "reply", buttonTitle: "Reply", options: { opensAppToForeground: true, isDestructive: false, isAuthenticationRequired: false }, textInput: { submitButtonTitle: "Send", placeholder: "Type your reply..." } },
+    ],
+  },
+];
+
+for (const cat of STATIC_CATEGORIES) {
+  Notifications.setNotificationCategoryAsync(cat.id, cat.actions as Notifications.NotificationAction[]).catch((e) =>
+    console.log(`Failed to register category ${cat.id}:`, e)
+  );
+}
+
+// ─── Navigation callback — set by App.tsx to navigate on notification tap ───
+let _onNotificationTap: ((data: { topic?: string; messageId?: string; message_id?: string }) => void) | null = null;
+
+export function setOnNotificationTap(
+  callback: (data: { topic?: string; messageId?: string; message_id?: string }) => void
+) {
+  _onNotificationTap = callback;
 }
 
 // ─── Get auth token for API calls ───
@@ -262,17 +315,26 @@ async function handleNotificationResponse(
   const data = notification.request.content.data as {
     message_id?: string;
     messageId?: string;
+    topic?: string;
     actions?: NotificationAction[];
     click_url?: string;
   } | undefined;
 
   const messageId = data?.message_id || data?.messageId;
 
+  // Default tap — open the message in the app, or open click_url
   if (actionIdentifier === Notifications.DEFAULT_ACTION_IDENTIFIER) {
     if (data?.click_url) {
       Linking.openURL(data.click_url).catch(console.error);
+    } else if (_onNotificationTap && data) {
+      _onNotificationTap(data);
     }
     return;
+  }
+
+  // Action button tapped — navigate to the app
+  if (_onNotificationTap && data) {
+    _onNotificationTap(data);
   }
 
   if (!messageId) return;

@@ -26,7 +26,7 @@ class ErrorBoundary extends React.Component<{children: React.ReactNode}, {hasErr
 }
 import { StatusBar } from "expo-status-bar";
 import { supabase } from "./src/lib/supabase";
-import { registerForPushNotifications, addNotificationReceivedListener, addNotificationResponseListener } from "./src/lib/notifications";
+import { registerForPushNotifications, addNotificationReceivedListener, addNotificationResponseListener, setOnNotificationTap } from "./src/lib/notifications";
 import { Topic } from "./src/lib/types";
 import SplashScreenComponent from "./src/screens/SplashScreen";
 import LoginScreen from "./src/screens/LoginScreen";
@@ -93,6 +93,12 @@ export default function App() {
     if (session) {
       let receivedSub: { remove: () => void } | undefined;
       let responseSub: { remove: () => void } | undefined;
+
+      // Navigate to inbox when a notification is tapped
+      setOnNotificationTap((_data) => {
+        setScreen("main");
+        setActiveTab("inbox");
+      });
 
       try {
         registerForPushNotifications().then((token) => {
