@@ -42,15 +42,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
-
-      - name: Install dependencies
-        run: npm ci --legacy-peer-deps
-
+      - run: npm ci --legacy-peer-deps
       - name: Type check
         run: npx tsc --noEmit
 
@@ -65,20 +61,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
-
-      - name: Setup EAS CLI
-        uses: expo/expo-github-action@v8
+      - uses: expo/expo-github-action@v8
         with:
           eas-version: latest
           token: ${{ secrets.EXPO_TOKEN }}
-
-      - name: Install dependencies
-        run: npm ci --legacy-peer-deps
+      - run: npm ci --legacy-peer-deps
 
       - name: Determine build profile
         id: profile
@@ -90,9 +81,7 @@ jobs:
           fi
 
       - name: Build iOS
-        run: eas build --platform ios --profile ${{ steps.profile.outputs.profile }} --non-interactive --no-wait
-        env:
-          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: eas build --platform ios --profile ${{ steps.profile.outputs.profile }} --non-interactive
 
   # ─── Android Build ───
   build-android:
@@ -105,20 +94,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
-
-      - name: Setup EAS CLI
-        uses: expo/expo-github-action@v8
+      - uses: expo/expo-github-action@v8
         with:
           eas-version: latest
           token: ${{ secrets.EXPO_TOKEN }}
-
-      - name: Install dependencies
-        run: npm ci --legacy-peer-deps
+      - run: npm ci --legacy-peer-deps
 
       - name: Determine build profile
         id: profile
@@ -130,13 +114,11 @@ jobs:
           fi
 
       - name: Build Android
-        run: eas build --platform android --profile ${{ steps.profile.outputs.profile }} --non-interactive --no-wait
-        env:
-          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: eas build --platform android --profile ${{ steps.profile.outputs.profile }} --non-interactive
 
-  # ─── Submit iOS to TestFlight / App Store ───
+  # ─── Submit iOS to TestFlight ───
   submit-ios:
-    name: Submit iOS to App Store Connect
+    name: Submit iOS to TestFlight
     needs: build-ios
     if: >
       (github.event_name == 'push') ||
@@ -145,45 +127,67 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
-
-      - name: Setup EAS CLI
-        uses: expo/expo-github-action@v8
+      - uses: expo/expo-github-action@v8
         with:
           eas-version: latest
           token: ${{ secrets.EXPO_TOKEN }}
+      - run: npm ci --legacy-peer-deps
 
-      - name: Install dependencies
-        run: npm ci --legacy-peer-deps
-
-      - name: Submit latest iOS build
+      - name: Submit to App Store Connect
         run: eas submit --platform ios --latest --non-interactive
-        env:
-          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
 
-  # ─── Notify on completion ───
+  # ─── Submit Android to Google Play ───
+  submit-android:
+    name: Submit Android to Google Play
+    needs: build-android
+    if: >
+      (github.event_name == 'push') ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.submit == 'true' &&
+       (github.event.inputs.platform == 'all' || github.event.inputs.platform == 'android'))
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+      - run: npm ci --legacy-peer-deps
+
+      - name: Write Google Play service account key
+        run: echo '${{ secrets.GOOGLE_SERVICE_ACCOUNT_KEY }}' > ./google-service-account-key.json
+
+      - name: Submit to Google Play (internal track)
+        run: eas submit --platform android --latest --non-interactive
+
+  # ─── Notify ───
   notify:
     name: Send notification
-    needs: [build-ios, build-android]
+    needs: [build-ios, build-android, submit-ios, submit-android]
     if: always()
     runs-on: ubuntu-latest
     steps:
       - name: Notify via IOTPush
         run: |
-          IOS_STATUS="${{ needs.build-ios.result }}"
-          ANDROID_STATUS="${{ needs.build-android.result }}"
+          IOS_BUILD="${{ needs.build-ios.result }}"
+          ANDROID_BUILD="${{ needs.build-android.result }}"
+          IOS_SUBMIT="${{ needs.submit-ios.result }}"
+          ANDROID_SUBMIT="${{ needs.submit-android.result }}"
 
-          if [ "$IOS_STATUS" = "success" ] && [ "$ANDROID_STATUS" = "success" ]; then
+          if [ "$IOS_BUILD" = "success" ] && [ "$ANDROID_BUILD" = "success" ]; then
             TITLE="✅ Mobile builds complete"
-            MSG="iOS and Android builds succeeded for ${{ github.sha }}. iOS submit to TestFlight triggered."
+            MSG="iOS build: ${IOS_BUILD}, submit: ${IOS_SUBMIT}. Android build: ${ANDROID_BUILD}, submit: ${ANDROID_SUBMIT}. Commit: ${{ github.sha }}"
             PRIORITY="normal"
           else
             TITLE="⚠️ Mobile build issue"
-            MSG="iOS: ${IOS_STATUS}, Android: ${ANDROID_STATUS} for ${{ github.sha }}"
+            MSG="iOS build: ${IOS_BUILD}, submit: ${IOS_SUBMIT}. Android build: ${ANDROID_BUILD}, submit: ${ANDROID_SUBMIT}. Commit: ${{ github.sha }}"
             PRIORITY="high"
           fi
 

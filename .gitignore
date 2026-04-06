@@ -11,3 +11,4 @@ web-build/
 .env
 .env.local
 package-lock.json
+google-service-account-key.json
