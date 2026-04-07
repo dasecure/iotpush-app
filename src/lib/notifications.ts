@@ -250,8 +250,15 @@ export async function registerForPushNotifications(): Promise<string | null> {
 // ─── Subscribe/unsubscribe push token (direct DB, existing topics) ───
 export async function subscribePushToken(topicId: string, pushToken: string): Promise<boolean> {
   try {
+    const { data: { user } } = await supabase.auth.getUser();
     const { error } = await supabase.from("iot_subscribers").upsert(
-      { topic_id: topicId, endpoint: pushToken, type: "expo_push", active: true },
+      {
+        topic_id: topicId,
+        endpoint: pushToken,
+        type: "expo_push",
+        active: true,
+        user_id: user?.id || null,
+      },
       { onConflict: "topic_id,endpoint" }
     );
     if (error) {
@@ -269,7 +276,7 @@ export async function unsubscribePushToken(topicId: string, pushToken: string): 
   try {
     const { error } = await supabase
       .from("iot_subscribers")
-      .update({ active: false })
+      .delete()
       .eq("topic_id", topicId)
       .eq("endpoint", pushToken);
     if (error) {
