@@ -1,12 +1,6 @@
 name: Build & Submit
 
 on:
-  push:
-    branches: [main]
-    paths-ignore:
-      - "**.md"
-      - ".gitignore"
-      - "scripts/**"
   workflow_dispatch:
     inputs:
       platform:
@@ -55,7 +49,6 @@ jobs:
     name: Build iOS
     needs: quality
     if: >
-      github.event_name == 'push' ||
       github.event.inputs.platform == 'all' ||
       github.event.inputs.platform == 'ios'
     runs-on: ubuntu-latest
@@ -71,24 +64,14 @@ jobs:
           token: ${{ secrets.EXPO_TOKEN }}
       - run: npm ci --legacy-peer-deps
 
-      - name: Determine build profile
-        id: profile
-        run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "profile=${{ github.event.inputs.profile }}" >> $GITHUB_OUTPUT
-          else
-            echo "profile=production" >> $GITHUB_OUTPUT
-          fi
-
       - name: Build iOS
-        run: eas build --platform ios --profile ${{ steps.profile.outputs.profile }} --non-interactive
+        run: eas build --platform ios --profile ${{ github.event.inputs.profile }} --non-interactive
 
   # ─── Android Build ───
   build-android:
     name: Build Android
     needs: quality
     if: >
-      github.event_name == 'push' ||
       github.event.inputs.platform == 'all' ||
       github.event.inputs.platform == 'android'
     runs-on: ubuntu-latest
@@ -104,26 +87,16 @@ jobs:
           token: ${{ secrets.EXPO_TOKEN }}
       - run: npm ci --legacy-peer-deps
 
-      - name: Determine build profile
-        id: profile
-        run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "profile=${{ github.event.inputs.profile }}" >> $GITHUB_OUTPUT
-          else
-            echo "profile=production" >> $GITHUB_OUTPUT
-          fi
-
       - name: Build Android
-        run: eas build --platform android --profile ${{ steps.profile.outputs.profile }} --non-interactive
+        run: eas build --platform android --profile ${{ github.event.inputs.profile }} --non-interactive
 
   # ─── Submit iOS to TestFlight ───
   submit-ios:
     name: Submit iOS to TestFlight
     needs: build-ios
     if: >
-      (github.event_name == 'push') ||
-      (github.event_name == 'workflow_dispatch' && github.event.inputs.submit == 'true' &&
-       (github.event.inputs.platform == 'all' || github.event.inputs.platform == 'ios'))
+      github.event.inputs.submit == 'true' &&
+      (github.event.inputs.platform == 'all' || github.event.inputs.platform == 'ios')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -145,9 +118,8 @@ jobs:
     name: Submit Android to Google Play
     needs: build-android
     if: >
-      (github.event_name == 'push') ||
-      (github.event_name == 'workflow_dispatch' && github.event.inputs.submit == 'true' &&
-       (github.event.inputs.platform == 'all' || github.event.inputs.platform == 'android'))
+      github.event.inputs.submit == 'true' &&
+      (github.event.inputs.platform == 'all' || github.event.inputs.platform == 'android')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
