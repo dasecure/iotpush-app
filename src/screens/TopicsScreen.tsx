@@ -35,6 +35,7 @@ export default function TopicsScreen({ onSelectTopic, onSubscribe, pushToken }: 
   // Subscription state
   const [subscribed, setSubscribed] = useState<Record<string, boolean>>({});
   const [toggling, setToggling] = useState<Record<string, boolean>>({});
+  const [ownedTopicIds, setOwnedTopicIds] = useState<Set<string>>(new Set());
 
   const fetchTopics = useCallback(async () => {
     try {
@@ -45,24 +46,51 @@ export default function TopicsScreen({ onSelectTopic, onSubscribe, pushToken }: 
         return;
       }
 
-      const { data } = await supabase
+      // Fetch topics owned by the user
+      const { data: ownedTopics } = await supabase
         .from("iot_topics")
         .select("*")
         .eq("user_id", user.id)
         .order("created_at", { ascending: false });
-      if (data) {
-        setTopics(data);
-        // Fetch message counts for all topics
-        const counts: Record<string, number> = {};
-        for (const topic of data) {
-          const { count } = await supabase
-            .from("iot_messages")
-            .select("*", { count: "exact", head: true })
-            .eq("topic_id", topic.id);
-          counts[topic.id] = count || 0;
-        }
-        setMessageCounts(counts);
+
+      // Fetch topic IDs the user is subscribed to
+      const { data: subs } = await supabase
+        .from("iot_subscribers")
+        .select("topic_id")
+        .eq("user_id", user.id);
+
+      // Get subscribed topic IDs that aren't already owned
+      const ownedIds = new Set((ownedTopics || []).map((t) => t.id));
+      setOwnedTopicIds(ownedIds);
+      const subscribedIds = (subs || [])
+        .map((s) => s.topic_id)
+        .filter((id) => !ownedIds.has(id));
+
+      // Fetch subscribed topics
+      let subscribedTopics: Topic[] = [];
+      if (subscribedIds.length > 0) {
+        const { data: subTopics } = await supabase
+          .from("iot_topics")
+          .select("*")
+          .in("id", subscribedIds)
+          .order("created_at", { ascending: false });
+        subscribedTopics = subTopics || [];
       }
+
+      // Merge: owned first, then subscribed
+      const allTopics = [...(ownedTopics || []), ...subscribedTopics];
+      setTopics(allTopics);
+
+      // Fetch message counts for all topics
+      const counts: Record<string, number> = {};
+      for (const topic of allTopics) {
+        const { count } = await supabase
+          .from("iot_messages")
+          .select("*", { count: "exact", head: true })
+          .eq("topic_id", topic.id);
+        counts[topic.id] = count || 0;
+      }
+      setMessageCounts(counts);
     } catch (e) {
       console.log("Failed to fetch topics:", e);
     } finally {
@@ -231,11 +259,18 @@ export default function TopicsScreen({ onSelectTopic, onSubscribe, pushToken }: 
           <TouchableOpacity
             style={styles.topicCard}
             onPress={() => onSelectTopic(item)}
-            onLongPress={() => deleteTopic(item)}
+            onLongPress={() => ownedTopicIds.has(item.id) && deleteTopic(item)}
             activeOpacity={0.7}
           >
             <View style={styles.topicHeader}>
-              <Text style={styles.topicName}>{item.name}</Text>
+              <View style={{ flexDirection: "row", alignItems: "center", flex: 1 }}>
+                <Text style={styles.topicName}>{item.name}</Text>
+                {!ownedTopicIds.has(item.id) && (
+                  <View style={styles.subscribedBadge}>
+                    <Text style={styles.subscribedBadgeText}>subscribed</Text>
+                  </View>
+                )}
+              </View>
               <View style={styles.topicMeta}>
                 {item.is_private && (
                   <View style={styles.privateBadge}>
@@ -272,9 +307,11 @@ export default function TopicsScreen({ onSelectTopic, onSubscribe, pushToken }: 
             {item.description && (
               <Text style={styles.topicDesc}>{item.description}</Text>
             )}
-            <Text style={styles.topicEndpoint}>
-              POST iotpush.com/api/push/{item.name}
-            </Text>
+            {ownedTopicIds.has(item.id) && (
+              <Text style={styles.topicEndpoint}>
+                POST iotpush.com/api/push/{item.name}
+              </Text>
+            )}
           </TouchableOpacity>
         )}
       />
@@ -359,6 +396,14 @@ const styles = StyleSheet.create({
   topicHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   topicName: { fontSize: 18, fontWeight: "600", color: "#fff", flex: 1 },
   topicMeta: { flexDirection: "row", alignItems: "center" },
+  subscribedBadge: {
+    backgroundColor: "#1e3a5f",
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6,
+    marginLeft: 8,
+  },
+  subscribedBadgeText: { color: "#60a5fa", fontSize: 10, fontWeight: "600" },
   privateBadge: { marginRight: 4 },
   privateBadgeText: { fontSize: 14 },
   countBadge: {
