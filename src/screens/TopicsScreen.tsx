@@ -209,6 +209,32 @@ export default function TopicsScreen({ onSelectTopic, onSubscribe, pushToken }: 
     ]);
   };
 
+  const unsubscribeFromTopic = (topic: Topic) => {
+    Alert.alert("Unsubscribe", `Unsubscribe from "${topic.name}"? You will stop receiving notifications.`, [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Unsubscribe",
+        style: "destructive",
+        onPress: async () => {
+          const { data: { user } } = await supabase.auth.getUser();
+          if (!user) return;
+          await supabase
+            .from("iot_subscribers")
+            .delete()
+            .eq("topic_id", topic.id)
+            .eq("user_id", user.id);
+          // Remove from local state immediately
+          setTopics((prev) => prev.filter((t) => t.id !== topic.id));
+          setSubscribed((prev) => {
+            const next = { ...prev };
+            delete next[topic.id];
+            return next;
+          });
+        },
+      },
+    ]);
+  };
+
   if (loading) {
     return (
       <View style={[styles.container, styles.center]}>
@@ -259,7 +285,7 @@ export default function TopicsScreen({ onSelectTopic, onSubscribe, pushToken }: 
           <TouchableOpacity
             style={styles.topicCard}
             onPress={() => onSelectTopic(item)}
-            onLongPress={() => ownedTopicIds.has(item.id) && deleteTopic(item)}
+            onLongPress={() => ownedTopicIds.has(item.id) ? deleteTopic(item) : unsubscribeFromTopic(item)}
             activeOpacity={0.7}
           >
             <View style={styles.topicHeader}>
