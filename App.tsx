@@ -235,6 +235,10 @@ export default function App() {
         {activeTab === "settings" && (
           <SettingsScreen
             userEmail={session?.user?.email ?? null}
+            emailVerified={
+              session?.user?.user_metadata?.email_verified === true ||
+              !!session?.user?.email_confirmed_at
+            }
             pushToken={pushToken}
             onLogout={handleLogout}
           />

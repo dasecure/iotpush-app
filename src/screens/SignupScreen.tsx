@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
+  Alert,
 } from "react-native";
 import { supabase } from "../lib/supabase";
 
@@ -21,6 +22,7 @@ export default function SignupScreen({ onSignup, onLogin }: SignupScreenProps) {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [confirmationSent, setConfirmationSent] = useState(false);
 
   const handleSignup = async () => {
     if (!email || !password) {
@@ -46,13 +48,60 @@ export default function SignupScreen({ onSignup, onLogin }: SignupScreenProps) {
       if (authError) {
         setError(authError.message);
       } else {
-        onSignup();
+        // Show confirmation message — user needs to verify email
+        setConfirmationSent(true);
       }
     } catch (e: any) {
       setLoading(false);
       setError(e?.message || "Signup failed. Please try again.");
     }
   };
+
+  if (confirmationSent) {
+    return (
+      <View style={styles.container}>
+        <View style={styles.content}>
+          <Text style={styles.logo}>
+            iot<Text style={styles.logoAccent}>push</Text>
+          </Text>
+          <Text style={styles.confirmTitle}>Check your email</Text>
+          <Text style={styles.confirmMessage}>
+            We sent a verification link to{"\n"}
+            <Text style={styles.confirmEmail}>{email}</Text>
+          </Text>
+          <Text style={styles.confirmHint}>
+            Click the link in the email to verify your account, then come back here to log in.
+          </Text>
+          <TouchableOpacity style={styles.button} onPress={onLogin}>
+            <Text style={styles.buttonText}>Go to Login</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.linkButton}
+            onPress={async () => {
+              try {
+                const { error: resendError } = await supabase.auth.resend({
+                  type: "signup",
+                  email: email.trim(),
+                });
+                if (resendError) {
+                  Alert.alert("Error", resendError.message);
+                } else {
+                  Alert.alert("Sent!", "Verification email resent.");
+                }
+              } catch {
+                Alert.alert("Error", "Failed to resend email.");
+              }
+            }}
+          >
+            <Text style={styles.linkText}>
+              Didn't get it?{" "}
+              <Text style={styles.linkAccent}>Resend email</Text>
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
 
   return (
     <KeyboardAvoidingView
@@ -124,4 +173,29 @@ const styles = StyleSheet.create({
   linkButton: { marginTop: 16, alignItems: "center" },
   linkText: { color: "#9ca3af", fontSize: 14 },
   linkAccent: { color: "#f97316" },
+  confirmTitle: {
+    fontSize: 24,
+    fontWeight: "bold",
+    color: "#fff",
+    textAlign: "center",
+    marginBottom: 16,
+  },
+  confirmMessage: {
+    fontSize: 16,
+    color: "#9ca3af",
+    textAlign: "center",
+    lineHeight: 24,
+    marginBottom: 8,
+  },
+  confirmEmail: {
+    color: "#f97316",
+    fontWeight: "600",
+  },
+  confirmHint: {
+    fontSize: 14,
+    color: "#6b7280",
+    textAlign: "center",
+    marginBottom: 32,
+    lineHeight: 20,
+  },
 });

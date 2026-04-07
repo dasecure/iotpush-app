@@ -14,11 +14,12 @@ import { supabase } from "../lib/supabase";
 
 interface SettingsScreenProps {
   userEmail: string | null;
+  emailVerified: boolean;
   pushToken: string | null;
   onLogout: () => void;
 }
 
-export default function SettingsScreen({ userEmail, pushToken, onLogout }: SettingsScreenProps) {
+export default function SettingsScreen({ userEmail, emailVerified, pushToken, onLogout }: SettingsScreenProps) {
   const apiBaseUrl = "https://www.iotpush.com/api/push/";
 
   const handleLogout = () => {
@@ -109,8 +110,34 @@ export default function SettingsScreen({ userEmail, pushToken, onLogout }: Setti
         <View style={styles.card}>
           <View style={styles.row}>
             <Text style={styles.label}>Email</Text>
-            <Text style={styles.value}>{userEmail || "Unknown"}</Text>
+            <Text style={styles.value}>{userEmail || "Not available"}</Text>
           </View>
+          {userEmail && !emailVerified && (
+            <View style={styles.verificationBanner}>
+              <Text style={styles.verificationText}>
+                Email not verified — check your inbox
+              </Text>
+              <TouchableOpacity
+                onPress={async () => {
+                  try {
+                    const { error } = await supabase.auth.resend({
+                      type: "signup",
+                      email: userEmail,
+                    });
+                    if (error) {
+                      Alert.alert("Error", error.message);
+                    } else {
+                      Alert.alert("Sent!", "Verification email resent. Check your inbox.");
+                    }
+                  } catch {
+                    Alert.alert("Error", "Failed to resend verification email.");
+                  }
+                }}
+              >
+                <Text style={styles.resendText}>Resend verification email</Text>
+              </TouchableOpacity>
+            </View>
+          )}
         </View>
 
         {/* API Section */}
@@ -273,5 +300,25 @@ const styles = StyleSheet.create({
     fontSize: 12,
     textAlign: "center",
     marginTop: 8,
+  },
+  verificationBanner: {
+    marginTop: 12,
+    backgroundColor: "#f9731610",
+    borderWidth: 1,
+    borderColor: "#f9731630",
+    borderRadius: 8,
+    padding: 12,
+  },
+  verificationText: {
+    color: "#fb923c",
+    fontSize: 13,
+    fontWeight: "500",
+  },
+  resendText: {
+    color: "#f97316",
+    fontSize: 13,
+    fontWeight: "600",
+    marginTop: 6,
+    textDecorationLine: "underline",
   },
 });
