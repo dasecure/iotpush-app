@@ -165,4 +165,4 @@ jobs:
 
           curl -s -X POST "https://iotpush.com/api/push/claude" \
             -H "Content-Type: application/json" \
-            -d "{\"message\": \"${MSG}\", \"title\": \"${TITLE}\", \"priority\": \"${PRIORITY}\", \"tags\": [\"ci\", \"mobile\"]}"
+            -d "{\"message\": \"${MSG}\", \"title\": \"${TITLE}\", \"priority\": \"${PRIORITY}\", \"tags\": \"ci,mobile\"}"
