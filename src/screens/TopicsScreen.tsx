@@ -19,10 +19,11 @@ import { Topic } from "../lib/types";
 
 interface TopicsScreenProps {
   onSelectTopic: (topic: Topic) => void;
+  onSubscribe?: () => void;
   pushToken?: string | null;
 }
 
-export default function TopicsScreen({ onSelectTopic, pushToken }: TopicsScreenProps) {
+export default function TopicsScreen({ onSelectTopic, onSubscribe, pushToken }: TopicsScreenProps) {
   const [topics, setTopics] = useState<Topic[]>([]);
   const [messageCounts, setMessageCounts] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
@@ -34,6 +35,7 @@ export default function TopicsScreen({ onSelectTopic, pushToken }: TopicsScreenP
   // Subscription state
   const [subscribed, setSubscribed] = useState<Record<string, boolean>>({});
   const [toggling, setToggling] = useState<Record<string, boolean>>({});
+  const [ownedTopicIds, setOwnedTopicIds] = useState<Set<string>>(new Set());
 
   const fetchTopics = useCallback(async () => {
     try {
@@ -44,24 +46,51 @@ export default function TopicsScreen({ onSelectTopic, pushToken }: TopicsScreenP
         return;
       }
 
-      const { data } = await supabase
+      // Fetch topics owned by the user
+      const { data: ownedTopics } = await supabase
         .from("iot_topics")
         .select("*")
         .eq("user_id", user.id)
         .order("created_at", { ascending: false });
-      if (data) {
-        setTopics(data);
-        // Fetch message counts for all topics
-        const counts: Record<string, number> = {};
-        for (const topic of data) {
-          const { count } = await supabase
-            .from("iot_messages")
-            .select("*", { count: "exact", head: true })
-            .eq("topic_id", topic.id);
-          counts[topic.id] = count || 0;
-        }
-        setMessageCounts(counts);
+
+      // Fetch topic IDs the user is subscribed to
+      const { data: subs } = await supabase
+        .from("iot_subscribers")
+        .select("topic_id")
+        .eq("user_id", user.id);
+
+      // Get subscribed topic IDs that aren't already owned
+      const ownedIds = new Set((ownedTopics || []).map((t) => t.id));
+      setOwnedTopicIds(ownedIds);
+      const subscribedIds = (subs || [])
+        .map((s) => s.topic_id)
+        .filter((id) => !ownedIds.has(id));
+
+      // Fetch subscribed topics
+      let subscribedTopics: Topic[] = [];
+      if (subscribedIds.length > 0) {
+        const { data: subTopics } = await supabase
+          .from("iot_topics")
+          .select("*")
+          .in("id", subscribedIds)
+          .order("created_at", { ascending: false });
+        subscribedTopics = subTopics || [];
       }
+
+      // Merge: owned first, then subscribed
+      const allTopics = [...(ownedTopics || []), ...subscribedTopics];
+      setTopics(allTopics);
+
+      // Fetch message counts for all topics
+      const counts: Record<string, number> = {};
+      for (const topic of allTopics) {
+        const { count } = await supabase
+          .from("iot_messages")
+          .select("*", { count: "exact", head: true })
+          .eq("topic_id", topic.id);
+        counts[topic.id] = count || 0;
+      }
+      setMessageCounts(counts);
     } catch (e) {
       console.log("Failed to fetch topics:", e);
     } finally {
@@ -148,7 +177,11 @@ export default function TopicsScreen({ onSelectTopic, pushToken }: TopicsScreenP
       });
 
       if (error) {
-        Alert.alert("Error", error.message);
+        if (error.code === "23505") {
+          Alert.alert("Topic Exists", `A topic named "${newName.trim().toLowerCase().replace(/[^a-z0-9-]/g, "-")}" already exists. Choose a different name.`);
+        } else {
+          Alert.alert("Error", error.message);
+        }
       } else {
         setNewName("");
         setNewDesc("");
@@ -176,6 +209,32 @@ export default function TopicsScreen({ onSelectTopic, pushToken }: TopicsScreenP
     ]);
   };
 
+  const unsubscribeFromTopic = (topic: Topic) => {
+    Alert.alert("Unsubscribe", `Unsubscribe from "${topic.name}"? You will stop receiving notifications.`, [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Unsubscribe",
+        style: "destructive",
+        onPress: async () => {
+          const { data: { user } } = await supabase.auth.getUser();
+          if (!user) return;
+          await supabase
+            .from("iot_subscribers")
+            .delete()
+            .eq("topic_id", topic.id)
+            .eq("user_id", user.id);
+          // Remove from local state immediately
+          setTopics((prev) => prev.filter((t) => t.id !== topic.id));
+          setSubscribed((prev) => {
+            const next = { ...prev };
+            delete next[topic.id];
+            return next;
+          });
+        },
+      },
+    ]);
+  };
+
   if (loading) {
     return (
       <View style={[styles.container, styles.center]}>
@@ -194,9 +253,16 @@ export default function TopicsScreen({ onSelectTopic, pushToken }: TopicsScreenP
           </Text>
           <Text style={styles.subtitle}>{topics.length} topic{topics.length !== 1 ? "s" : ""}</Text>
         </View>
-        <TouchableOpacity style={styles.addButton} onPress={() => setShowCreate(true)}>
-          <Text style={styles.addButtonText}>+ New</Text>
-        </TouchableOpacity>
+        <View style={{ flexDirection: "row", gap: 8 }}>
+          {onSubscribe && (
+            <TouchableOpacity style={styles.subscribeHeaderBtn} onPress={onSubscribe}>
+              <Text style={styles.subscribeHeaderBtnText}>Subscribe</Text>
+            </TouchableOpacity>
+          )}
+          <TouchableOpacity style={styles.addButton} onPress={() => setShowCreate(true)}>
+            <Text style={styles.addButtonText}>+ New</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* Topics List */}
@@ -219,11 +285,18 @@ export default function TopicsScreen({ onSelectTopic, pushToken }: TopicsScreenP
           <TouchableOpacity
             style={styles.topicCard}
             onPress={() => onSelectTopic(item)}
-            onLongPress={() => deleteTopic(item)}
+            onLongPress={() => ownedTopicIds.has(item.id) ? deleteTopic(item) : unsubscribeFromTopic(item)}
             activeOpacity={0.7}
           >
             <View style={styles.topicHeader}>
-              <Text style={styles.topicName}>{item.name}</Text>
+              <View style={{ flexDirection: "row", alignItems: "center", flex: 1 }}>
+                <Text style={styles.topicName}>{item.name}</Text>
+                {!ownedTopicIds.has(item.id) && (
+                  <View style={styles.subscribedBadge}>
+                    <Text style={styles.subscribedBadgeText}>subscribed</Text>
+                  </View>
+                )}
+              </View>
               <View style={styles.topicMeta}>
                 {item.is_private && (
                   <View style={styles.privateBadge}>
@@ -260,9 +333,11 @@ export default function TopicsScreen({ onSelectTopic, pushToken }: TopicsScreenP
             {item.description && (
               <Text style={styles.topicDesc}>{item.description}</Text>
             )}
-            <Text style={styles.topicEndpoint}>
-              POST iotpush.com/api/push/{item.name}
-            </Text>
+            {ownedTopicIds.has(item.id) && (
+              <Text style={styles.topicEndpoint}>
+                POST iotpush.com/api/push/{item.name}
+              </Text>
+            )}
           </TouchableOpacity>
         )}
       />
@@ -333,6 +408,8 @@ const styles = StyleSheet.create({
   subtitle: { fontSize: 14, color: "#6b7280", marginTop: 2 },
   addButton: { backgroundColor: "#f97316", paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8 },
   addButtonText: { color: "#000", fontWeight: "600", fontSize: 14 },
+  subscribeHeaderBtn: { borderWidth: 1, borderColor: "#f97316", paddingHorizontal: 14, paddingVertical: 8, borderRadius: 8 },
+  subscribeHeaderBtnText: { color: "#f97316", fontWeight: "600", fontSize: 14 },
   list: { padding: 16 },
   topicCard: {
     backgroundColor: "#111827",
@@ -345,6 +422,14 @@ const styles = StyleSheet.create({
   topicHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   topicName: { fontSize: 18, fontWeight: "600", color: "#fff", flex: 1 },
   topicMeta: { flexDirection: "row", alignItems: "center" },
+  subscribedBadge: {
+    backgroundColor: "#1e3a5f",
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6,
+    marginLeft: 8,
+  },
+  subscribedBadgeText: { color: "#60a5fa", fontSize: 10, fontWeight: "600" },
   privateBadge: { marginRight: 4 },
   privateBadgeText: { fontSize: 14 },
   countBadge: {

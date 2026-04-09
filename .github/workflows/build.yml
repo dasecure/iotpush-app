@@ -1,0 +1,168 @@
+name: Build & Submit
+
+on:
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: "Platform to build"
+        required: true
+        default: "all"
+        type: choice
+        options:
+          - all
+          - ios
+          - android
+      profile:
+        description: "Build profile"
+        required: true
+        default: "production"
+        type: choice
+        options:
+          - preview
+          - production
+      submit:
+        description: "Submit to stores after build"
+        required: false
+        default: true
+        type: boolean
+
+env:
+  EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+
+jobs:
+  # ─── Lint & Type Check ───
+  quality:
+    name: Quality checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --legacy-peer-deps
+      - name: Type check
+        run: npx tsc --noEmit
+
+  # ─── iOS Build ───
+  build-ios:
+    name: Build iOS
+    needs: quality
+    if: >
+      github.event.inputs.platform == 'all' ||
+      github.event.inputs.platform == 'ios'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+      - run: npm ci --legacy-peer-deps
+
+      - name: Build iOS
+        run: eas build --platform ios --profile ${{ github.event.inputs.profile }} --non-interactive
+
+  # ─── Android Build ───
+  build-android:
+    name: Build Android
+    needs: quality
+    if: >
+      github.event.inputs.platform == 'all' ||
+      github.event.inputs.platform == 'android'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+      - run: npm ci --legacy-peer-deps
+
+      - name: Build Android
+        run: eas build --platform android --profile ${{ github.event.inputs.profile }} --non-interactive
+
+  # ─── Submit iOS to TestFlight ───
+  submit-ios:
+    name: Submit iOS to TestFlight
+    needs: build-ios
+    if: >
+      github.event.inputs.submit == 'true' &&
+      (github.event.inputs.platform == 'all' || github.event.inputs.platform == 'ios')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+      - run: npm ci --legacy-peer-deps
+
+      - name: Submit to App Store Connect
+        run: eas submit --platform ios --latest --non-interactive
+
+  # ─── Submit Android to Google Play ───
+  submit-android:
+    name: Submit Android to Google Play
+    needs: build-android
+    if: >
+      github.event.inputs.submit == 'true' &&
+      (github.event.inputs.platform == 'all' || github.event.inputs.platform == 'android')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+      - run: npm ci --legacy-peer-deps
+
+      - name: Write Google Play service account key
+        run: echo '${{ secrets.GOOGLE_SERVICE_ACCOUNT_KEY }}' > ./google-service-account-key.json
+
+      - name: Submit to Google Play (internal track)
+        run: eas submit --platform android --latest --non-interactive
+
+  # ─── Notify ───
+  notify:
+    name: Send notification
+    needs: [build-ios, build-android, submit-ios, submit-android]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Notify via IOTPush
+        run: |
+          IOS_BUILD="${{ needs.build-ios.result }}"
+          ANDROID_BUILD="${{ needs.build-android.result }}"
+          IOS_SUBMIT="${{ needs.submit-ios.result }}"
+          ANDROID_SUBMIT="${{ needs.submit-android.result }}"
+
+          if [ "$IOS_BUILD" = "success" ] && [ "$ANDROID_BUILD" = "success" ]; then
+            TITLE="✅ Mobile builds complete"
+            MSG="iOS build: ${IOS_BUILD}, submit: ${IOS_SUBMIT}. Android build: ${ANDROID_BUILD}, submit: ${ANDROID_SUBMIT}. Commit: ${{ github.sha }}"
+            PRIORITY="normal"
+          else
+            TITLE="⚠️ Mobile build issue"
+            MSG="iOS build: ${IOS_BUILD}, submit: ${IOS_SUBMIT}. Android build: ${ANDROID_BUILD}, submit: ${ANDROID_SUBMIT}. Commit: ${{ github.sha }}"
+            PRIORITY="high"
+          fi
+
+          curl -s -X POST "https://iotpush.com/api/push/claude" \
+            -H "Content-Type: application/json" \
+            -d "{\"message\": \"${MSG}\", \"title\": \"${TITLE}\", \"priority\": \"${PRIORITY}\", \"tags\": \"ci,mobile\"}"

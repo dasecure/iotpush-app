@@ -1,6 +1,6 @@
 {
   "cli": {
-    "appVersionSource": "local"
+    "appVersionSource": "remote"
   },
   "build": {
     "base": {
@@ -40,7 +40,7 @@
       "android": {
         "serviceAccountKeyPath": "./google-service-account-key.json",
         "track": "internal",
-        "releaseStatus": "completed"
+        "releaseStatus": "draft"
       }
     }
   }

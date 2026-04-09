@@ -15,7 +15,8 @@ import {
 } from "react-native";
 import * as Clipboard from "expo-clipboard";
 import { supabase } from "../lib/supabase";
-import { Topic, Message } from "../lib/types";
+import { Topic, Message, NotificationAction } from "../lib/types";
+import { reportAction } from "../lib/notifications";
 
 interface MessagesScreenProps {
   topic: Topic;
@@ -28,6 +29,9 @@ export default function MessagesScreen({ topic, onBack }: MessagesScreenProps) {
   const [refreshing, setRefreshing] = useState(false);
   const [testMessage, setTestMessage] = useState("");
   const [sending, setSending] = useState(false);
+  const [actedMessages, setActedMessages] = useState<Record<string, string>>({});
+  const [replyingTo, setReplyingTo] = useState<string | null>(null);
+  const [replyText, setReplyText] = useState("");
 
   const fetchMessages = useCallback(async () => {
     try {
@@ -151,6 +155,37 @@ export default function MessagesScreen({ topic, onBack }: MessagesScreenProps) {
     }
   };
 
+  const handleAction = async (messageId: string, action: NotificationAction) => {
+    if (action.type === "reply") {
+      setReplyingTo(messageId);
+      return;
+    }
+    if (action.type === "url" && action.url) {
+      const { Linking } = require("react-native");
+      Linking.openURL(action.url).catch(console.error);
+    }
+    const success = await reportAction(messageId, action.id);
+    if (success) {
+      setActedMessages((prev) => ({ ...prev, [messageId]: action.label }));
+      Alert.alert("Action sent", `"${action.label}" reported successfully`);
+    } else {
+      Alert.alert("Error", "Failed to send action. Please try again.");
+    }
+  };
+
+  const handleReplySubmit = async (messageId: string) => {
+    if (!replyText.trim()) return;
+    const success = await reportAction(messageId, "reply", replyText.trim());
+    if (success) {
+      setActedMessages((prev) => ({ ...prev, [messageId]: "Reply sent" }));
+      setReplyingTo(null);
+      setReplyText("");
+      Alert.alert("Reply sent", "Your reply has been delivered");
+    } else {
+      Alert.alert("Error", "Failed to send reply. Please try again.");
+    }
+  };
+
   return (
     <KeyboardAvoidingView
       style={styles.container}
@@ -265,6 +300,59 @@ export default function MessagesScreen({ topic, onBack }: MessagesScreenProps) {
                   </View>
                 ))}
               </View>
+
+              {/* Action buttons */}
+              {item.actions && item.actions.length > 0 && !actedMessages[item.id] && (
+                <View style={styles.actionRow}>
+                  {(item.actions as NotificationAction[]).map((action) => (
+                    <TouchableOpacity
+                      key={action.id}
+                      style={[
+                        styles.actionBtn,
+                        action.destructive && styles.actionBtnDestructive,
+                      ]}
+                      onPress={() => handleAction(item.id, action)}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={[
+                        styles.actionBtnText,
+                        action.destructive && styles.actionBtnTextDestructive,
+                      ]}>
+                        {action.label}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
+
+              {/* Reply input */}
+              {replyingTo === item.id && (
+                <View style={styles.replyRow}>
+                  <TextInput
+                    style={styles.replyInput}
+                    placeholder="Type your reply..."
+                    placeholderTextColor="#6b7280"
+                    value={replyText}
+                    onChangeText={setReplyText}
+                    returnKeyType="send"
+                    onSubmitEditing={() => handleReplySubmit(item.id)}
+                    autoFocus
+                  />
+                  <TouchableOpacity
+                    style={styles.replySendBtn}
+                    onPress={() => handleReplySubmit(item.id)}
+                  >
+                    <Text style={styles.replySendText}>Send</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+
+              {/* Acted confirmation */}
+              {actedMessages[item.id] && (
+                <View style={styles.actedBadge}>
+                  <Text style={styles.actedText}>✓ {actedMessages[item.id]}</Text>
+                </View>
+              )}
             </View>
           )}
         />
@@ -378,4 +466,73 @@ const styles = StyleSheet.create({
   emptyTitle: { fontSize: 20, fontWeight: "600", color: "#fff", marginBottom: 8 },
   emptyText: { fontSize: 14, color: "#6b7280", textAlign: "center", lineHeight: 22, paddingHorizontal: 20 },
   code: { fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace", color: "#f97316", fontSize: 13 },
+  actionRow: {
+    flexDirection: "row",
+    marginTop: 12,
+    gap: 8,
+    borderTopWidth: 1,
+    borderTopColor: "#1f2937",
+    paddingTop: 12,
+  },
+  actionBtn: {
+    flex: 1,
+    backgroundColor: "#f9731615",
+    borderWidth: 1,
+    borderColor: "#f97316",
+    borderRadius: 8,
+    paddingVertical: 10,
+    alignItems: "center",
+  },
+  actionBtnDestructive: {
+    backgroundColor: "#ef444415",
+    borderColor: "#ef4444",
+  },
+  actionBtnText: {
+    color: "#f97316",
+    fontSize: 13,
+    fontWeight: "600",
+  },
+  actionBtnTextDestructive: {
+    color: "#ef4444",
+  },
+  replyRow: {
+    flexDirection: "row",
+    marginTop: 10,
+    gap: 8,
+  },
+  replyInput: {
+    flex: 1,
+    backgroundColor: "#030712",
+    borderWidth: 1,
+    borderColor: "#374151",
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    fontSize: 14,
+    color: "#fff",
+  },
+  replySendBtn: {
+    backgroundColor: "#f97316",
+    borderRadius: 8,
+    paddingHorizontal: 16,
+    justifyContent: "center",
+  },
+  replySendText: {
+    color: "#000",
+    fontWeight: "600",
+    fontSize: 13,
+  },
+  actedBadge: {
+    marginTop: 10,
+    backgroundColor: "#10b98120",
+    borderRadius: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    alignSelf: "flex-start",
+  },
+  actedText: {
+    color: "#10b981",
+    fontSize: 12,
+    fontWeight: "500",
+  },
 });

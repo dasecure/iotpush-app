@@ -21,3 +21,4 @@ ErrorUtils.setGlobalHandler((error: any, isFatal?: boolean) => {
 import App from './App';
 
 registerRootComponent(App);
+// v2.0.0

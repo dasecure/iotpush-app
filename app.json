@@ -2,7 +2,7 @@
   "expo": {
     "name": "iotpush",
     "slug": "iotpush",
-    "version": "1.1.1",
+    "version": "2.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
@@ -15,7 +15,7 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.dasecure.iotpush",
-      "buildNumber": "2",
+      "buildNumber": "3",
       "icon": "./assets/icon.png",
       "infoPlist": {
         "NSAppTransportSecurity": {
@@ -29,7 +29,7 @@
         "backgroundColor": "#030712"
       },
       "package": "com.dasecure.iotpush",
-      "versionCode": 6,
+      "versionCode": 10,
       "googleServicesFile": "./google-services.json"
     },
     "plugins": [
