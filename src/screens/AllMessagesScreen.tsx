@@ -7,10 +7,12 @@ import {
   StyleSheet,
   RefreshControl,
   ActivityIndicator,
+  Alert,
   Platform,
 } from "react-native";
 import { supabase } from "../lib/supabase";
-import { Topic, Message } from "../lib/types";
+import { Topic, Message, NotificationAction } from "../lib/types";
+import { reportAction } from "../lib/notifications";
 
 interface AllMessagesScreenProps {
   onSelectTopic: (topic: Topic) => void;
@@ -21,6 +23,7 @@ export default function AllMessagesScreen({ onSelectTopic }: AllMessagesScreenPr
   const [topics, setTopics] = useState<Record<string, Topic>>({});
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [actedMessages, setActedMessages] = useState<Record<string, string>>({});
 
   const fetchData = useCallback(async () => {
     try {
@@ -36,7 +39,7 @@ export default function AllMessagesScreen({ onSelectTopic }: AllMessagesScreenPr
         .from("iot_topics")
         .select("*")
         .eq("user_id", user.id);
-      
+
       if (!topicsData || topicsData.length === 0) {
         setTopics({});
         setMessages([]);
@@ -103,6 +106,26 @@ export default function AllMessagesScreen({ onSelectTopic }: AllMessagesScreenPr
     setRefreshing(true);
     await fetchData();
     setRefreshing(false);
+  };
+
+  const handleAction = async (item: Message, action: NotificationAction) => {
+    // For reply actions, navigate into the topic so the user can use the full reply UI
+    if (action.type === "reply") {
+      const topic = topics[item.topic_id];
+      if (topic) onSelectTopic(topic);
+      return;
+    }
+    if (action.type === "url" && action.url) {
+      const { Linking } = require("react-native");
+      Linking.openURL(action.url).catch(console.error);
+    }
+    const success = await reportAction(item.id, action.id);
+    if (success) {
+      setActedMessages((prev) => ({ ...prev, [item.id]: action.label }));
+      Alert.alert("Action sent", `"${action.label}" reported successfully`);
+    } else {
+      Alert.alert("Error", "Failed to send action. Please try again.");
+    }
   };
 
   const formatTime = (iso: string) => {
@@ -187,6 +210,40 @@ export default function AllMessagesScreen({ onSelectTopic }: AllMessagesScreenPr
                   </View>
                 </View>
               )}
+
+              {/* Action buttons */}
+              {item.actions && item.actions.length > 0 && !actedMessages[item.id] && (
+                <View style={styles.actionRow}>
+                  {(item.actions as NotificationAction[]).map((action) => (
+                    <TouchableOpacity
+                      key={action.id}
+                      style={[
+                        styles.actionBtn,
+                        action.destructive && styles.actionBtnDestructive,
+                      ]}
+                      onPress={(e) => {
+                        e.stopPropagation?.();
+                        handleAction(item, action);
+                      }}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={[
+                        styles.actionBtnText,
+                        action.destructive && styles.actionBtnTextDestructive,
+                      ]}>
+                        {action.label}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
+
+              {/* Acted confirmation */}
+              {actedMessages[item.id] && (
+                <View style={styles.actedBadge}>
+                  <Text style={styles.actedText}>✓ {actedMessages[item.id]}</Text>
+                </View>
+              )}
             </TouchableOpacity>
           );
         }}
@@ -243,4 +300,46 @@ const styles = StyleSheet.create({
   emptyIcon: { fontSize: 48, marginBottom: 16 },
   emptyTitle: { fontSize: 20, fontWeight: "600", color: "#fff", marginBottom: 8 },
   emptyText: { fontSize: 14, color: "#6b7280", textAlign: "center" },
+  actionRow: {
+    flexDirection: "row",
+    marginTop: 12,
+    gap: 8,
+    borderTopWidth: 1,
+    borderTopColor: "#1f2937",
+    paddingTop: 12,
+  },
+  actionBtn: {
+    flex: 1,
+    backgroundColor: "#f9731615",
+    borderWidth: 1,
+    borderColor: "#f97316",
+    borderRadius: 8,
+    paddingVertical: 10,
+    alignItems: "center",
+  },
+  actionBtnDestructive: {
+    backgroundColor: "#ef444415",
+    borderColor: "#ef4444",
+  },
+  actionBtnText: {
+    color: "#f97316",
+    fontSize: 13,
+    fontWeight: "600",
+  },
+  actionBtnTextDestructive: {
+    color: "#ef4444",
+  },
+  actedBadge: {
+    marginTop: 10,
+    backgroundColor: "#10b98120",
+    borderRadius: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    alignSelf: "flex-start",
+  },
+  actedText: {
+    color: "#10b981",
+    fontSize: 12,
+    fontWeight: "500",
+  },
 });

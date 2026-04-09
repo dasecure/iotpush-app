@@ -1,5 +1,5 @@
-import React, { useEffect, useState, ErrorInfo } from "react";
-import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator } from "react-native";
+import React, { useEffect, useState, useCallback, ErrorInfo } from "react";
+import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Linking } from "react-native";
 
 class ErrorBoundary extends React.Component<{children: React.ReactNode}, {hasError: boolean, error: string}> {
   constructor(props: {children: React.ReactNode}) {
@@ -49,6 +49,44 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<Tab>("topics");
   const [selectedTopic, setSelectedTopic] = useState<Topic | null>(null);
   const [pushToken, setPushToken] = useState<string | null>(null);
+  const [initialDeepLink, setInitialDeepLink] = useState<string | null>(null);
+
+  const handleDeepLink = useCallback((url: string) => {
+    try {
+      const path = url.replace(/^iotpush:\/\//, '').split('?')[0];
+      if (path === 'inbox') {
+        setScreen('main');
+        setActiveTab('inbox');
+      } else if (path === 'topics') {
+        setScreen('main');
+        setActiveTab('topics');
+      } else if (path === 'settings') {
+        setScreen('main');
+        setActiveTab('settings');
+      }
+    } catch (e) {
+      console.log('Deep link error:', e);
+    }
+  }, []);
+
+  // Listen for deep links (when app is running in background)
+  useEffect(() => {
+    Linking.getInitialURL().then((url) => {
+      if (url) setInitialDeepLink(url);
+    });
+    const sub = Linking.addEventListener('url', ({ url }) => {
+      handleDeepLink(url);
+    });
+    return () => sub.remove();
+  }, [handleDeepLink]);
+
+  // Process cold-start deep link once session is ready
+  useEffect(() => {
+    if (!loading && session && initialDeepLink) {
+      handleDeepLink(initialDeepLink);
+      setInitialDeepLink(null);
+    }
+  }, [loading, session, initialDeepLink, handleDeepLink]);
 
   useEffect(() => {
     try {
