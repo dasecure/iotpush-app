@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useRef } from "react";
 import {
   View,
   Text,
@@ -12,18 +12,36 @@ import {
 } from "react-native";
 import { supabase } from "../lib/supabase";
 import { Topic, Message, NotificationAction } from "../lib/types";
-import { reportAction } from "../lib/notifications";
+import { reportAction, NotificationTapData } from "../lib/notifications";
 
 interface AllMessagesScreenProps {
   onSelectTopic: (topic: Topic) => void;
+  tappedNotification?: NotificationTapData | null;
+  onDismissTapped?: () => void;
 }
 
-export default function AllMessagesScreen({ onSelectTopic }: AllMessagesScreenProps) {
+export default function AllMessagesScreen({ onSelectTopic, tappedNotification, onDismissTapped }: AllMessagesScreenProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [topics, setTopics] = useState<Record<string, Topic>>({});
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [actedMessages, setActedMessages] = useState<Record<string, string>>({});
+  const topicsRef = useRef<Record<string, Topic>>({});
+  const listRef = useRef<FlatList<Message>>(null);
+
+  const tappedMessageId = tappedNotification?.message_id || tappedNotification?.messageId || null;
+
+  // Scroll to the tapped message once messages are loaded
+  useEffect(() => {
+    if (!tappedMessageId || loading) return;
+    const index = messages.findIndex((m) => m.id === tappedMessageId);
+    if (index >= 0) {
+      // Slight delay so the FlatList has rendered
+      setTimeout(() => {
+        listRef.current?.scrollToIndex({ index, viewPosition: 0.2, animated: true });
+      }, 300);
+    }
+  }, [tappedMessageId, loading, messages]);
 
   const fetchData = useCallback(async () => {
     try {
@@ -54,6 +72,7 @@ export default function AllMessagesScreen({ onSelectTopic }: AllMessagesScreenPr
         topicIds.push(t.id);
       }
       setTopics(topicsMap);
+      topicsRef.current = topicsMap;
 
       // Fetch messages from all topics
       const { data: messagesData } = await supabase
@@ -86,9 +105,11 @@ export default function AllMessagesScreen({ onSelectTopic }: AllMessagesScreenPr
         },
         (payload) => {
           const newMsg = payload.new as Message;
-          // Only add if it's from one of our topics
+          // Only add if it's from one of our topics (use ref — the `topics`
+          // state captured in this closure is stale/empty at subscribe time,
+          // which previously let messages from ANY topic leak into the list)
           setMessages((prev) => {
-            if (Object.keys(topics).length === 0 || topics[newMsg.topic_id]) {
+            if (topicsRef.current[newMsg.topic_id] && !prev.some((m) => m.id === newMsg.id)) {
               return [newMsg, ...prev];
             }
             return prev;
@@ -167,9 +188,39 @@ export default function AllMessagesScreen({ onSelectTopic }: AllMessagesScreenPr
         <Text style={styles.subtitle}>{messages.length} messages</Text>
       </View>
 
+      {/* Tapped notification banner — shows the message the user tapped,
+          from the notification payload itself, so it works even when the
+          message isn't in the list (e.g. subscribed topics) */}
+      {tappedNotification && (tappedNotification.title || tappedNotification.body) && (
+        <View style={styles.tappedBanner}>
+          <View style={styles.tappedHeader}>
+            {tappedNotification.topic && (
+              <View style={styles.topicBadge}>
+                <Text style={styles.topicBadgeText}>{tappedNotification.topic}</Text>
+              </View>
+            )}
+            <TouchableOpacity onPress={onDismissTapped} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+              <Text style={styles.tappedClose}>✕</Text>
+            </TouchableOpacity>
+          </View>
+          {tappedNotification.title && (
+            <Text style={styles.messageTitle}>{tappedNotification.title}</Text>
+          )}
+          {tappedNotification.body && (
+            <Text style={styles.messageBody}>{tappedNotification.body}</Text>
+          )}
+        </View>
+      )}
+
       <FlatList
+        ref={listRef}
         data={messages}
         keyExtractor={(item) => item.id}
+        onScrollToIndexFailed={({ index }) => {
+          setTimeout(() => {
+            listRef.current?.scrollToIndex({ index, viewPosition: 0.2, animated: true });
+          }, 500);
+        }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#f97316" />}
         contentContainerStyle={[styles.list, messages.length === 0 && { flex: 1 }]}
         ListEmptyComponent={
@@ -185,7 +236,7 @@ export default function AllMessagesScreen({ onSelectTopic }: AllMessagesScreenPr
           const topic = topics[item.topic_id];
           return (
             <TouchableOpacity
-              style={styles.messageCard}
+              style={[styles.messageCard, item.id === tappedMessageId && styles.messageCardHighlighted]}
               onPress={() => topic && onSelectTopic(topic)}
               activeOpacity={0.7}
             >
@@ -271,6 +322,30 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 16,
     marginBottom: 10,
+  },
+  messageCardHighlighted: {
+    borderColor: "#f97316",
+    backgroundColor: "#f9731610",
+  },
+  tappedBanner: {
+    backgroundColor: "#1c1207",
+    borderWidth: 1,
+    borderColor: "#f97316",
+    borderRadius: 12,
+    padding: 16,
+    marginHorizontal: 16,
+    marginTop: 12,
+  },
+  tappedHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 8,
+  },
+  tappedClose: {
+    color: "#6b7280",
+    fontSize: 16,
+    fontWeight: "600",
   },
   messageTop: {
     flexDirection: "row",

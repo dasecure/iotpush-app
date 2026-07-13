@@ -138,12 +138,39 @@ for (const cat of STATIC_CATEGORIES) {
 }
 
 // ─── Navigation callback — set by App.tsx to navigate on notification tap ───
-let _onNotificationTap: ((data: { topic?: string; messageId?: string; message_id?: string }) => void) | null = null;
+export interface NotificationTapData {
+  topic?: string;
+  messageId?: string;
+  message_id?: string;
+  title?: string;
+  body?: string;
+  receivedAt?: string;
+}
+
+let _onNotificationTap: ((data: NotificationTapData) => void) | null = null;
+// If a tap arrives before App.tsx registers the callback (cold start),
+// buffer it here and replay when the callback is set.
+let _pendingTapData: NotificationTapData | null = null;
+// Dedup guard so a response isn't handled twice (listener + getLastNotificationResponseAsync)
+let _lastHandledResponseKey: string | null = null;
 
 export function setOnNotificationTap(
-  callback: (data: { topic?: string; messageId?: string; message_id?: string }) => void
+  callback: (data: NotificationTapData) => void
 ) {
   _onNotificationTap = callback;
+  if (_pendingTapData) {
+    const pending = _pendingTapData;
+    _pendingTapData = null;
+    callback(pending);
+  }
+}
+
+function dispatchTap(data: NotificationTapData) {
+  if (_onNotificationTap) {
+    _onNotificationTap(data);
+  } else {
+    _pendingTapData = data;
+  }
 }
 
 // ─── Get auth token for API calls ───
@@ -375,7 +402,15 @@ async function handleNotificationResponse(
   response: Notifications.NotificationResponse
 ): Promise<void> {
   const { notification, actionIdentifier, userText } = response;
-  const data = notification.request.content.data as {
+
+  // Dedup: the same response can arrive via the response listener AND
+  // getLastNotificationResponseAsync() on cold start. Handle it once.
+  const responseKey = `${notification.request.identifier}:${actionIdentifier}`;
+  if (responseKey === _lastHandledResponseKey) return;
+  _lastHandledResponseKey = responseKey;
+
+  const content = notification.request.content;
+  const data = content.data as {
     message_id?: string;
     messageId?: string;
     topic?: string;
@@ -385,20 +420,28 @@ async function handleNotificationResponse(
 
   const messageId = data?.message_id || data?.messageId;
 
+  // Carry the visible notification content along so the app can display
+  // the tapped message immediately, without a fetch (works even for
+  // messages from subscribed topics the user doesn't own).
+  const tapData: NotificationTapData = {
+    ...(data || {}),
+    title: content.title || undefined,
+    body: content.body || undefined,
+    receivedAt: new Date(notification.date).toISOString(),
+  };
+
   // Default tap — open the message in the app, or open click_url
   if (actionIdentifier === Notifications.DEFAULT_ACTION_IDENTIFIER) {
     if (data?.click_url) {
       Linking.openURL(data.click_url).catch(console.error);
-    } else if (_onNotificationTap && data) {
-      _onNotificationTap(data);
+    } else {
+      dispatchTap(tapData);
     }
     return;
   }
 
   // Action button tapped — navigate to the app
-  if (_onNotificationTap && data) {
-    _onNotificationTap(data);
-  }
+  dispatchTap(tapData);
 
   if (!messageId) return;
 
@@ -466,4 +509,19 @@ export function addNotificationResponseListener(
     handleNotificationResponse(response).catch(console.error);
     callback(response);
   });
+}
+
+// ─── Cold-start handling ───
+// When the app is launched (from a killed state) by tapping a notification,
+// the response listener above is registered too late to receive the event.
+// Call this once at startup to pick up and process that initial tap.
+export async function processInitialNotificationResponse(): Promise<void> {
+  try {
+    const response = await Notifications.getLastNotificationResponseAsync();
+    if (response) {
+      await handleNotificationResponse(response);
+    }
+  } catch (e) {
+    console.log("Failed to process initial notification response:", e);
+  }
 }

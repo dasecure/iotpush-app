@@ -26,7 +26,7 @@ class ErrorBoundary extends React.Component<{children: React.ReactNode}, {hasErr
 }
 import { StatusBar } from "expo-status-bar";
 import { supabase } from "./src/lib/supabase";
-import { registerForPushNotifications, addNotificationReceivedListener, addNotificationResponseListener, setOnNotificationTap } from "./src/lib/notifications";
+import { registerForPushNotifications, addNotificationReceivedListener, addNotificationResponseListener, setOnNotificationTap, processInitialNotificationResponse, NotificationTapData } from "./src/lib/notifications";
 import { Topic } from "./src/lib/types";
 import SplashScreenComponent from "./src/screens/SplashScreen";
 import LoginScreen from "./src/screens/LoginScreen";
@@ -50,6 +50,7 @@ export default function App() {
   const [selectedTopic, setSelectedTopic] = useState<Topic | null>(null);
   const [pushToken, setPushToken] = useState<string | null>(null);
   const [initialDeepLink, setInitialDeepLink] = useState<string | null>(null);
+  const [tappedNotification, setTappedNotification] = useState<NotificationTapData | null>(null);
 
   const handleDeepLink = useCallback((url: string) => {
     try {
@@ -132,10 +133,17 @@ export default function App() {
       let receivedSub: { remove: () => void } | undefined;
       let responseSub: { remove: () => void } | undefined;
 
-      // Navigate to inbox when a notification is tapped
-      setOnNotificationTap((_data) => {
+      // Navigate to inbox and show the tapped message
+      setOnNotificationTap((data) => {
         setScreen("main");
         setActiveTab("inbox");
+        setTappedNotification(data);
+      });
+
+      // Cold start: if the app was launched by tapping a notification,
+      // the response listener missed it — pick it up now.
+      processInitialNotificationResponse().catch((err) => {
+        console.log("Initial notification processing failed:", err);
       });
 
       try {
@@ -268,7 +276,11 @@ export default function App() {
           <TopicsScreen onSelectTopic={handleSelectTopic} onSubscribe={() => setScreen("subscribe")} pushToken={pushToken} />
         )}
         {activeTab === "inbox" && (
-          <AllMessagesScreen onSelectTopic={handleSelectTopic} />
+          <AllMessagesScreen
+            onSelectTopic={handleSelectTopic}
+            tappedNotification={tappedNotification}
+            onDismissTapped={() => setTappedNotification(null)}
+          />
         )}
         {activeTab === "settings" && (
           <SettingsScreen
