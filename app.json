@@ -15,7 +15,6 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.dasecure.iotpush",
-      "buildNumber": "3",
       "icon": "./assets/icon.png",
       "infoPlist": {
         "NSAppTransportSecurity": {
@@ -29,7 +28,6 @@
         "backgroundColor": "#030712"
       },
       "package": "com.dasecure.iotpush",
-      "versionCode": 10,
       "googleServicesFile": "./google-services.json"
     },
     "plugins": [
