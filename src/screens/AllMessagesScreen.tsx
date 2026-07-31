@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
   Alert,
   Platform,
+  Linking,
 } from "react-native";
 import { supabase } from "../lib/supabase";
 import { Topic, Message, NotificationAction } from "../lib/types";
@@ -129,6 +130,14 @@ export default function AllMessagesScreen({ onSelectTopic, tappedNotification, o
     setRefreshing(false);
   };
 
+  const openLink = (url: string) => {
+    Linking.openURL(url).catch(() => Alert.alert("Could not open link", url));
+  };
+
+  // Display-only host extraction. Avoid new URL(): its host parsing is
+  // unreliable on some React Native runtimes without a polyfill.
+  const linkHost = (url: string) => url.replace(/^[a-z]+:\/\//i, "").split("/")[0];
+
   const handleAction = async (item: Message, action: NotificationAction) => {
     // For reply actions, navigate into the topic so the user can use the full reply UI
     if (action.type === "reply") {
@@ -137,8 +146,7 @@ export default function AllMessagesScreen({ onSelectTopic, tappedNotification, o
       return;
     }
     if (action.type === "url" && action.url) {
-      const { Linking } = require("react-native");
-      Linking.openURL(action.url).catch(console.error);
+      openLink(action.url);
     }
     const success = await reportAction(item.id, action.id);
     if (success) {
@@ -209,6 +217,16 @@ export default function AllMessagesScreen({ onSelectTopic, tappedNotification, o
           {tappedNotification.body && (
             <Text style={styles.messageBody}>{tappedNotification.body}</Text>
           )}
+          {(tappedNotification as { click_url?: string }).click_url && (
+            <TouchableOpacity
+              style={styles.linkChip}
+              onPress={() => openLink((tappedNotification as { click_url?: string }).click_url!)}
+            >
+              <Text style={styles.linkChipText} numberOfLines={1}>
+                🔗 {linkHost((tappedNotification as { click_url?: string }).click_url!)} — tap to open
+              </Text>
+            </TouchableOpacity>
+          )}
         </View>
       )}
 
@@ -237,14 +255,23 @@ export default function AllMessagesScreen({ onSelectTopic, tappedNotification, o
           return (
             <TouchableOpacity
               style={[styles.messageCard, item.id === tappedMessageId && styles.messageCardHighlighted]}
-              onPress={() => topic && onSelectTopic(topic)}
+              onPress={() => {
+                // A message with a click_url promises "tap to view" — honor it.
+                // Topic navigation stays available via the topic badge.
+                if (item.click_url) openLink(item.click_url);
+                else if (topic) onSelectTopic(topic);
+              }}
               activeOpacity={0.7}
             >
               <View style={styles.messageTop}>
                 {topic && (
-                  <View style={styles.topicBadge}>
+                  <TouchableOpacity
+                    style={styles.topicBadge}
+                    onPress={() => onSelectTopic(topic)}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
                     <Text style={styles.topicBadgeText}>{topic.name}</Text>
-                  </View>
+                  </TouchableOpacity>
                 )}
                 <Text style={styles.messageTime}>{formatTime(item.created_at)}</Text>
               </View>
@@ -252,6 +279,15 @@ export default function AllMessagesScreen({ onSelectTopic, tappedNotification, o
                 <Text style={styles.messageTitle}>{item.title}</Text>
               )}
               <Text style={styles.messageBody} numberOfLines={3}>{item.message}</Text>
+
+              {/* Link chip — tapping the card opens click_url */}
+              {item.click_url && (
+                <View style={styles.linkChip}>
+                  <Text style={styles.linkChipText} numberOfLines={1}>
+                    🔗 {linkHost(item.click_url)} — tap to open
+                  </Text>
+                </View>
+              )}
               {item.priority !== "normal" && (
                 <View style={styles.messageFooter}>
                   <View style={[styles.priorityBadge, { backgroundColor: priorityColor(item.priority) + "20" }]}>
@@ -403,6 +439,22 @@ const styles = StyleSheet.create({
   },
   actionBtnTextDestructive: {
     color: "#ef4444",
+  },
+  linkChip: {
+    marginTop: 8,
+    backgroundColor: "#f9731612",
+    borderWidth: 1,
+    borderColor: "#f9731640",
+    borderRadius: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    alignSelf: "flex-start",
+    maxWidth: "100%",
+  },
+  linkChipText: {
+    color: "#f97316",
+    fontSize: 12,
+    fontWeight: "500",
   },
   actedBadge: {
     marginTop: 10,

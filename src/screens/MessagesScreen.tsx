@@ -12,6 +12,7 @@ import {
   ActivityIndicator,
   Platform,
   KeyboardAvoidingView,
+  Linking,
 } from "react-native";
 import * as Clipboard from "expo-clipboard";
 import { supabase } from "../lib/supabase";
@@ -155,14 +156,21 @@ export default function MessagesScreen({ topic, onBack }: MessagesScreenProps) {
     }
   };
 
+  const openLink = (url: string) => {
+    Linking.openURL(url).catch(() => Alert.alert("Could not open link", url));
+  };
+
+  // Display-only host extraction. Avoid new URL(): its host parsing is
+  // unreliable on some React Native runtimes without a polyfill.
+  const linkHost = (url: string) => url.replace(/^[a-z]+:\/\//i, "").split("/")[0];
+
   const handleAction = async (messageId: string, action: NotificationAction) => {
     if (action.type === "reply") {
       setReplyingTo(messageId);
       return;
     }
     if (action.type === "url" && action.url) {
-      const { Linking } = require("react-native");
-      Linking.openURL(action.url).catch(console.error);
+      openLink(action.url);
     }
     const success = await reportAction(messageId, action.id);
     if (success) {
@@ -278,7 +286,12 @@ export default function MessagesScreen({ topic, onBack }: MessagesScreenProps) {
             </View>
           }
           renderItem={({ item }) => (
-            <View style={styles.messageCard}>
+            <TouchableOpacity
+              style={styles.messageCard}
+              onPress={item.click_url ? () => openLink(item.click_url!) : undefined}
+              disabled={!item.click_url}
+              activeOpacity={0.7}
+            >
               <View style={styles.messageHeader}>
                 {item.title ? (
                   <Text style={styles.messageTitle}>{item.title}</Text>
@@ -286,6 +299,16 @@ export default function MessagesScreen({ topic, onBack }: MessagesScreenProps) {
                 <Text style={styles.messageTime}>{formatTime(item.created_at)}</Text>
               </View>
               <Text style={styles.messageBody}>{item.message}</Text>
+
+              {/* Link chip — the whole card opens click_url on tap */}
+              {item.click_url && (
+                <View style={styles.linkChip}>
+                  <Text style={styles.linkChipText} numberOfLines={1}>
+                    🔗 {linkHost(item.click_url)} — tap to open
+                  </Text>
+                </View>
+              )}
+
               <View style={styles.messageFooter}>
                 {item.priority !== "normal" && (
                   <View style={[styles.priorityBadge, { backgroundColor: priorityColor(item.priority) + "20" }]}>
@@ -353,7 +376,7 @@ export default function MessagesScreen({ topic, onBack }: MessagesScreenProps) {
                   <Text style={styles.actedText}>✓ {actedMessages[item.id]}</Text>
                 </View>
               )}
-            </View>
+            </TouchableOpacity>
           )}
         />
       )}
@@ -521,6 +544,22 @@ const styles = StyleSheet.create({
     color: "#000",
     fontWeight: "600",
     fontSize: 13,
+  },
+  linkChip: {
+    marginTop: 8,
+    backgroundColor: "#f9731612",
+    borderWidth: 1,
+    borderColor: "#f9731640",
+    borderRadius: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    alignSelf: "flex-start",
+    maxWidth: "100%",
+  },
+  linkChipText: {
+    color: "#f97316",
+    fontSize: 12,
+    fontWeight: "500",
   },
   actedBadge: {
     marginTop: 10,
