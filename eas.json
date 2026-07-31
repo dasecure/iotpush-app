@@ -38,6 +38,18 @@
         "appleTeamId": "685L2Q2WD9"
       },
       "android": {
+        "serviceAccountKeyPath": "/Users/testaccount/.config/play/iotpush-play-sa.json",
+        "track": "internal",
+        "releaseStatus": "draft"
+      }
+    },
+    "ci": {
+      "ios": {
+        "appleId": "vincent@dasecure.com",
+        "ascAppId": "6758430222",
+        "appleTeamId": "685L2Q2WD9"
+      },
+      "android": {
         "serviceAccountKeyPath": "./google-service-account-key.json",
         "track": "internal",
         "releaseStatus": "draft"

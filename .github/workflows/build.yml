@@ -133,11 +133,14 @@ jobs:
           token: ${{ secrets.EXPO_TOKEN }}
       - run: npm ci --legacy-peer-deps
 
+      # The `ci` submit profile in eas.json points at this repo-relative path.
+      # The `production` profile points at ~/.config/play on the maintainer's
+      # machine, so the key never has to sit inside the working tree locally.
       - name: Write Google Play service account key
         run: echo '${{ secrets.GOOGLE_SERVICE_ACCOUNT_KEY }}' > ./google-service-account-key.json
 
       - name: Submit to Google Play (internal track)
-        run: eas submit --platform android --latest --non-interactive
+        run: eas submit --platform android --latest --non-interactive --profile ci
 
   # ─── Notify ───
   notify:
