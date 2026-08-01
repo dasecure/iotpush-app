@@ -170,11 +170,15 @@ export default function TopicsScreen({ onSelectTopic, onSubscribe, pushToken }: 
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      const { error } = await supabase.from("iot_topics").insert({
-        user_id: user.id,
-        name: newName.trim().toLowerCase().replace(/[^a-z0-9-]/g, "-"),
-        description: newDesc.trim() || null,
-      });
+      const { data: created, error } = await supabase
+        .from("iot_topics")
+        .insert({
+          user_id: user.id,
+          name: newName.trim().toLowerCase().replace(/[^a-z0-9-]/g, "-"),
+          description: newDesc.trim() || null,
+        })
+        .select("id")
+        .single();
 
       if (error) {
         if (error.code === "23505") {
@@ -183,6 +187,41 @@ export default function TopicsScreen({ onSelectTopic, onSubscribe, pushToken }: 
           Alert.alert("Error", error.message);
         }
       } else {
+        // Subscribe the creator to their own topic.
+        //
+        // Creating a topic used to insert the row and stop, so the only way to
+        // receive your own messages was to notice a dim 🔕 at 50% opacity --
+        // which reads as a *disabled* control -- and tap it. Nothing in the app
+        // said so, and the result was a new user sending a message and having
+        // nothing arrive, ever.
+        //
+        // This matters more now that server-side questions default to an
+        // audience of "owner": an unsubscribed creator makes their own topic
+        // unanswerable, and POST /api/v1/questions returns 409
+        // no_reachable_device rather than hanging until timeout.
+        if (created?.id && pushToken) {
+          const subscribed = await subscribePushToken(created.id, pushToken);
+          if (subscribed) {
+            setSubscribed((prev) => ({ ...prev, [created.id]: true }));
+          } else {
+            Alert.alert(
+              "Topic created",
+              "The topic was created, but this device could not be subscribed to it. " +
+                "Tap the bell on the topic to try again -- until then, messages sent " +
+                "to it will not arrive here."
+            );
+          }
+        } else if (created?.id && !pushToken) {
+          // No push token means notifications were denied or unavailable. Say so
+          // plainly rather than letting the user discover it by silence.
+          Alert.alert(
+            "Topic created — notifications are off",
+            "This device has no push token, so nothing sent to this topic can " +
+              "reach you. Enable notifications for iotpush in Settings, then tap " +
+              "the bell on the topic to subscribe."
+          );
+        }
+
         setNewName("");
         setNewDesc("");
         setShowCreate(false);
