@@ -148,12 +148,19 @@ export default function AllMessagesScreen({ onSelectTopic, tappedNotification, o
     if (action.type === "url" && action.url) {
       openLink(action.url);
     }
-    const success = await reportAction(item.id, action.id);
-    if (success) {
+    const result = await reportAction(item.id, action.id);
+    if (result.recorded) {
       setActedMessages((prev) => ({ ...prev, [item.id]: action.label }));
       Alert.alert("Action sent", `"${action.label}" reported successfully`);
+    } else if (result.ok) {
+      // Closed before the tap arrived. Retrying cannot help.
+      setActedMessages((prev) => ({ ...prev, [item.id]: "No longer open" }));
+      Alert.alert("Too late", result.reason || "This request was already closed.");
     } else {
-      Alert.alert("Error", "Failed to send action. Please try again.");
+      Alert.alert(
+        "Not sent",
+        `${result.reason || "Something went wrong."}${result.retryable ? " Please try again." : ""}`
+      );
     }
   };
 

@@ -172,25 +172,37 @@ export default function MessagesScreen({ topic, onBack }: MessagesScreenProps) {
     if (action.type === "url" && action.url) {
       openLink(action.url);
     }
-    const success = await reportAction(messageId, action.id);
-    if (success) {
+    const result = await reportAction(messageId, action.id);
+    if (result.recorded) {
       setActedMessages((prev) => ({ ...prev, [messageId]: action.label }));
       Alert.alert("Action sent", `"${action.label}" reported successfully`);
+    } else if (result.ok) {
+      // The question closed first. "Try again" would be wrong advice.
+      setActedMessages((prev) => ({ ...prev, [messageId]: "No longer open" }));
+      Alert.alert("Too late", result.reason || "This request was already closed.");
     } else {
-      Alert.alert("Error", "Failed to send action. Please try again.");
+      Alert.alert(
+        "Not sent",
+        `${result.reason || "Something went wrong."}${result.retryable ? " Please try again." : ""}`
+      );
     }
   };
 
   const handleReplySubmit = async (messageId: string) => {
     if (!replyText.trim()) return;
-    const success = await reportAction(messageId, "reply", replyText.trim());
-    if (success) {
+    const result = await reportAction(messageId, "reply", replyText.trim());
+    if (result.recorded) {
       setActedMessages((prev) => ({ ...prev, [messageId]: "Reply sent" }));
       setReplyingTo(null);
       setReplyText("");
       Alert.alert("Reply sent", "Your reply has been delivered");
+    } else if (result.ok) {
+      Alert.alert("Too late", result.reason || "This request was already closed.");
     } else {
-      Alert.alert("Error", "Failed to send reply. Please try again.");
+      Alert.alert(
+        "Not sent",
+        `${result.reason || "Something went wrong."}${result.retryable ? " Please try again." : ""}`
+      );
     }
   };
 
