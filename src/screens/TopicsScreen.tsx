@@ -14,7 +14,7 @@ import {
   KeyboardAvoidingView,
 } from "react-native";
 import { supabase } from "../lib/supabase";
-import { subscribePushToken, unsubscribePushToken } from "../lib/notifications";
+import { subscribePushToken, unsubscribePushToken, createTopicViaAPI } from "../lib/notifications";
 import { Topic } from "../lib/types";
 
 interface TopicsScreenProps {
@@ -167,22 +167,51 @@ export default function TopicsScreen({ onSelectTopic, onSubscribe, pushToken }: 
     setCreating(true);
 
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-
-      const { error } = await supabase.from("iot_topics").insert({
-        user_id: user.id,
-        name: newName.trim().toLowerCase().replace(/[^a-z0-9-]/g, "-"),
-        description: newDesc.trim() || null,
-      });
+      const { topic: created, error } = await createTopicViaAPI(
+        newName.trim(),
+        newDesc.trim() || null
+      );
 
       if (error) {
-        if (error.code === "23505") {
-          Alert.alert("Topic Exists", `A topic named "${newName.trim().toLowerCase().replace(/[^a-z0-9-]/g, "-")}" already exists. Choose a different name.`);
-        } else {
-          Alert.alert("Error", error.message);
-        }
+        // Server errors are already user-facing: plan limit with the upgrade
+        // path, "Topic name already exists", private-topic gating.
+        Alert.alert("Could not create topic", error);
       } else {
+        // Subscribe the creator to their own topic.
+        //
+        // Creating a topic used to insert the row and stop, so the only way to
+        // receive your own messages was to notice a dim 🔕 at 50% opacity --
+        // which reads as a *disabled* control -- and tap it. Nothing in the app
+        // said so, and the result was a new user sending a message and having
+        // nothing arrive, ever.
+        //
+        // This matters more now that server-side questions default to an
+        // audience of "owner": an unsubscribed creator makes their own topic
+        // unanswerable, and POST /api/v1/questions returns 409
+        // no_reachable_device rather than hanging until timeout.
+        if (created?.id && pushToken) {
+          const subscribed = await subscribePushToken(created.id, pushToken);
+          if (subscribed) {
+            setSubscribed((prev) => ({ ...prev, [created.id]: true }));
+          } else {
+            Alert.alert(
+              "Topic created",
+              "The topic was created, but this device could not be subscribed to it. " +
+                "Tap the bell on the topic to try again -- until then, messages sent " +
+                "to it will not arrive here."
+            );
+          }
+        } else if (created?.id && !pushToken) {
+          // No push token means notifications were denied or unavailable. Say so
+          // plainly rather than letting the user discover it by silence.
+          Alert.alert(
+            "Topic created — notifications are off",
+            "This device has no push token, so nothing sent to this topic can " +
+              "reach you. Enable notifications for iotpush in Settings, then tap " +
+              "the bell on the topic to subscribe."
+          );
+        }
+
         setNewName("");
         setNewDesc("");
         setShowCreate(false);
