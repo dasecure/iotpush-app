@@ -14,7 +14,7 @@ import {
   KeyboardAvoidingView,
 } from "react-native";
 import { supabase } from "../lib/supabase";
-import { subscribePushToken, unsubscribePushToken } from "../lib/notifications";
+import { subscribePushToken, unsubscribePushToken, createTopicViaAPI } from "../lib/notifications";
 import { Topic } from "../lib/types";
 
 interface TopicsScreenProps {
@@ -167,25 +167,15 @@ export default function TopicsScreen({ onSelectTopic, onSubscribe, pushToken }: 
     setCreating(true);
 
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-
-      const { data: created, error } = await supabase
-        .from("iot_topics")
-        .insert({
-          user_id: user.id,
-          name: newName.trim().toLowerCase().replace(/[^a-z0-9-]/g, "-"),
-          description: newDesc.trim() || null,
-        })
-        .select("id")
-        .single();
+      const { topic: created, error } = await createTopicViaAPI(
+        newName.trim(),
+        newDesc.trim() || null
+      );
 
       if (error) {
-        if (error.code === "23505") {
-          Alert.alert("Topic Exists", `A topic named "${newName.trim().toLowerCase().replace(/[^a-z0-9-]/g, "-")}" already exists. Choose a different name.`);
-        } else {
-          Alert.alert("Error", error.message);
-        }
+        // Server errors are already user-facing: plan limit with the upgrade
+        // path, "Topic name already exists", private-topic gating.
+        Alert.alert("Could not create topic", error);
       } else {
         // Subscribe the creator to their own topic.
         //

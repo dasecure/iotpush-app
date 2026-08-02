@@ -317,6 +317,40 @@ export async function unsubscribePushToken(topicId: string, pushToken: string): 
   }
 }
 
+// ─── Create a topic via the API ───
+// The screen used to insert into iot_topics directly, which bypassed plan
+// limits, skipped private-topic gating, and never generated an api_key — every
+// app-created topic was public, and anyone who guessed the name could push to
+// it and read its history. POST /api/topics enforces all of that server-side.
+export async function createTopicViaAPI(
+  name: string,
+  description?: string | null,
+  isPrivate: boolean = false
+): Promise<{ topic: { id: string; name: string } | null; error: string | null }> {
+  const token = await getAccessToken();
+  if (!token) return { topic: null, error: "Not signed in." };
+
+  try {
+    const res = await fetch(`${API_BASE}/topics`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ name, description: description || null, is_private: isPrivate }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      // The server's errors are user-facing by design (plan limit with upgrade
+      // path, duplicate name, private-topics gating) — surface them verbatim.
+      return { topic: null, error: data.error || `Failed to create topic (HTTP ${res.status}).` };
+    }
+    return { topic: data.topic, error: null };
+  } catch (e) {
+    return { topic: null, error: "Network error creating topic." };
+  }
+}
+
 // ─── Cross-device subscribe via API ───
 export async function subscribeToTopicByName(
   topicName: string,
