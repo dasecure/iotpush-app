@@ -156,13 +156,39 @@ jobs:
           IOS_SUBMIT="${{ needs.submit-ios.result }}"
           ANDROID_SUBMIT="${{ needs.submit-android.result }}"
 
-          if [ "$IOS_BUILD" = "success" ] && [ "$ANDROID_BUILD" = "success" ]; then
-            TITLE="✅ Mobile builds complete"
-            MSG="iOS build: ${IOS_BUILD}, submit: ${IOS_SUBMIT}. Android build: ${ANDROID_BUILD}, submit: ${ANDROID_SUBMIT}. Commit: ${{ github.sha }}"
+          # A job that did not run is "skipped", not a failure. The old condition
+          # required BOTH platforms to be "success", so every single-platform
+          # build -- the normal case, since platform is a dispatch input --
+          # reported as an issue. An alert that is always red is an alert nobody
+          # reads, which is worse than no alert.
+          #
+          # Fail only on an actual failure or cancellation.
+          FAILED=""
+          for pair in "iOS build:${IOS_BUILD}" "iOS submit:${IOS_SUBMIT}" \
+                      "Android build:${ANDROID_BUILD}" "Android submit:${ANDROID_SUBMIT}"; do
+            NAME="${pair%%:*}"
+            RESULT="${pair##*:}"
+            case "$RESULT" in
+              success|skipped|"") ;;
+              *) FAILED="${FAILED}${NAME} (${RESULT}); " ;;
+            esac
+          done
+
+          # Report only what actually ran, so the message says something true
+          # rather than listing three "skipped" for a one-platform build.
+          RAN=""
+          [ "$IOS_BUILD"      != "skipped" ] && RAN="${RAN}iOS build: ${IOS_BUILD}. "
+          [ "$IOS_SUBMIT"     != "skipped" ] && RAN="${RAN}iOS submit: ${IOS_SUBMIT}. "
+          [ "$ANDROID_BUILD"  != "skipped" ] && RAN="${RAN}Android build: ${ANDROID_BUILD}. "
+          [ "$ANDROID_SUBMIT" != "skipped" ] && RAN="${RAN}Android submit: ${ANDROID_SUBMIT}. "
+
+          if [ -z "$FAILED" ]; then
+            TITLE="✅ Mobile build complete"
+            MSG="${RAN}${{ github.ref_name }} @ ${GITHUB_SHA:0:7}"
             PRIORITY="normal"
           else
-            TITLE="⚠️ Mobile build issue"
-            MSG="iOS build: ${IOS_BUILD}, submit: ${IOS_SUBMIT}. Android build: ${ANDROID_BUILD}, submit: ${ANDROID_SUBMIT}. Commit: ${{ github.sha }}"
+            TITLE="⚠️ Mobile build failed"
+            MSG="Failed: ${FAILED}${RAN}${{ github.ref_name }} @ ${GITHUB_SHA:0:7}"
             PRIORITY="high"
           fi
 
