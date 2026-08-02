@@ -390,13 +390,25 @@ export async function subscribeToTopicByName(
 }
 
 // ─── Report action to server ───
+export type ActionResult = {
+  ok: boolean;
+  /** True when the answer was recorded. False when someone or something else got there first. */
+  recorded: boolean;
+  /** Human-readable, already suitable to show the user. */
+  reason?: string;
+  /** True when retrying could plausibly help. A closed question is not retryable. */
+  retryable: boolean;
+};
+
 export async function reportAction(
   messageId: string,
   actionId: string,
   replyText?: string
-): Promise<boolean> {
+): Promise<ActionResult> {
   const token = await getAccessToken();
-  if (!token) return false;
+  if (!token) {
+    return { ok: false, recorded: false, reason: "You are signed out.", retryable: false };
+  }
 
   let deviceId: string | null = null;
   if (AsyncStorage) {
@@ -418,16 +430,68 @@ export async function reportAction(
       }),
     });
 
+    if (response.status === 409) {
+      // The question closed before this tap arrived — already answered, expired,
+      // or cancelled. Retrying cannot help, and telling the user to "try again"
+      // would be actively wrong.
+      let detail = "This request was already closed.";
+      try {
+        const body = await response.json();
+        if (body?.reason) detail = body.reason;
+      } catch {}
+      console.log("[iotpush] Action not recorded:", detail);
+      return { ok: true, recorded: false, reason: detail, retryable: false };
+    }
+
     if (!response.ok) {
       console.log("Action report failed:", response.status);
-      return false;
+      return {
+        ok: false,
+        recorded: false,
+        reason: `The server rejected it (HTTP ${response.status}).`,
+        retryable: response.status >= 500,
+      };
     }
 
     console.log("[iotpush] Action reported:", actionId);
-    return true;
+    return { ok: true, recorded: true, retryable: false };
   } catch (err) {
     console.log("Action report error:", err);
-    return false;
+    return {
+      ok: false,
+      recorded: false,
+      reason: "Could not reach iotpush.",
+      retryable: true,
+    };
+  }
+}
+
+/**
+ * Tell the user their tap did not take effect.
+ *
+ * Deliberately only on failure. A confirmation that a tap worked is a
+ * notification about a notification -- you just pressed the button, you know --
+ * and every extra push erodes the attention the important ones depend on.
+ *
+ * A tap that silently did nothing is the opposite case: you believe you decided,
+ * the sender believes you did not, and nothing anywhere says so. That is worth
+ * interrupting for.
+ */
+async function warnActionNotDelivered(actionId: string, result: ActionResult) {
+  try {
+    await Notifications.scheduleNotificationAsync({
+      content: {
+        title: result.recorded === false && result.ok ? "Too late to respond" : "Response not sent",
+        body:
+          `Your "${actionId}" response was not recorded. ` +
+          (result.reason || "") +
+          (result.retryable ? " Open the app to try again." : ""),
+        sound: false,
+      },
+      trigger: null,
+    });
+  } catch (err) {
+    console.log("Failed to warn about undelivered action:", err);
   }
 }
 
@@ -484,7 +548,13 @@ async function handleNotificationResponse(
     Linking.openURL(matchedAction.url).catch(console.error);
   }
 
-  await reportAction(messageId, actionIdentifier, userText || undefined);
+  // The result used to be discarded here, so a tap from the lock screen that
+  // never landed produced no feedback at all: the user believed they had
+  // answered while the sender was still waiting or had already given up.
+  const result = await reportAction(messageId, actionIdentifier, userText || undefined);
+  if (!result.recorded) {
+    await warnActionNotDelivered(actionIdentifier, result);
+  }
 }
 
 // ─── Register dynamic notification categories for actions ───
