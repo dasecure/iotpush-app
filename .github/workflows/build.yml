@@ -166,6 +166,32 @@ jobs:
             PRIORITY="high"
           fi
 
-          curl -s -X POST "https://iotpush.com/api/push/claude" \
+          # Two things were wrong here and the notification has never arrived.
+          #
+          # 1. Apex. https://iotpush.com 307-redirects to www, and a 307 drops the
+          #    POST body -- documented on /docs as the single most common
+          #    integration issue, and this workflow was doing it to itself.
+          # 2. The `claude` topic is private, so an unauthenticated POST is 401.
+          #
+          # IOTPUSH_API_KEY is an account API key (Settings -> API keys) with the
+          # push:send scope. Without it this step degrades to a warning rather
+          # than failing the run -- a missed notification must not fail a build
+          # that otherwise succeeded.
+          if [ -z "${{ secrets.IOTPUSH_API_KEY }}" ]; then
+            echo "::warning::IOTPUSH_API_KEY is not set; skipping build notification."
+            exit 0
+          fi
+
+          HTTP=$(curl -s -o /tmp/iotpush.out -w "%{http_code}" \
+            -X POST "https://www.iotpush.com/api/push/claude" \
+            -H "Authorization: Bearer ${{ secrets.IOTPUSH_API_KEY }}" \
             -H "Content-Type: application/json" \
-            -d "{\"message\": \"${MSG}\", \"title\": \"${TITLE}\", \"priority\": \"${PRIORITY}\", \"tags\": \"ci,mobile\"}"
+            -d "{\"message\": \"${MSG}\", \"title\": \"${TITLE}\", \"priority\": \"${PRIORITY}\", \"tags\": \"ci,mobile\"}")
+
+          # Report the outcome instead of swallowing it, which is how this went
+          # unnoticed for so long.
+          if [ "$HTTP" -ge 400 ]; then
+            echo "::warning::iotpush notification failed (HTTP $HTTP): $(cat /tmp/iotpush.out)"
+          else
+            echo "Notification sent (HTTP $HTTP)."
+          fi
