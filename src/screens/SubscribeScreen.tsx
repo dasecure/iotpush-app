@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
   Alert, ActivityIndicator, KeyboardAvoidingView, Platform,
@@ -8,17 +8,21 @@ import { subscribeToTopicByName } from "../lib/notifications";
 interface SubscribeScreenProps {
   onSubscribed?: () => void;
   onBack: () => void;
+  /** Pre-filled from a deep link (iotpush://subscribe?topic=...&key=...). */
+  initialTopic?: string;
+  initialApiKey?: string;
 }
 
-export default function SubscribeScreen({ onSubscribed, onBack }: SubscribeScreenProps) {
-  const [topicName, setTopicName] = useState("");
-  const [apiKey, setApiKey] = useState("");
-  const [showApiKey, setShowApiKey] = useState(false);
+export default function SubscribeScreen({ onSubscribed, onBack, initialTopic, initialApiKey }: SubscribeScreenProps) {
+  const [topicName, setTopicName] = useState(initialTopic || "");
+  const [apiKey, setApiKey] = useState(initialApiKey || "");
+  const [showApiKey, setShowApiKey] = useState(!!initialApiKey);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const autoSubmitted = useRef(false);
 
-  const handleSubscribe = async () => {
-    const trimmed = topicName.trim().toLowerCase();
+  const handleSubscribe = useCallback(async (opts?: { name?: string; key?: string }) => {
+    const trimmed = (opts?.name ?? topicName).trim().toLowerCase();
     if (!trimmed) {
       Alert.alert("Error", "Please enter a topic name");
       return;
@@ -28,7 +32,7 @@ export default function SubscribeScreen({ onSubscribed, onBack }: SubscribeScree
     setError(null);
 
     try {
-      const result = await subscribeToTopicByName(trimmed, apiKey.trim() || undefined);
+      const result = await subscribeToTopicByName(trimmed, (opts?.key ?? apiKey).trim() || undefined);
       if (result) {
         Alert.alert("Subscribed!", `You are now subscribed to "${result.topic_name}"`, [
           { text: "OK", onPress: () => onSubscribed?.() },
@@ -39,7 +43,19 @@ export default function SubscribeScreen({ onSubscribed, onBack }: SubscribeScree
     } finally {
       setLoading(false);
     }
-  };
+  }, [topicName, apiKey, onSubscribed]);
+
+  // Arrived via a deep link — subscribe automatically, once, so the common
+  // case (scan a QR, tap a claim-page link) needs zero typing. If it fails
+  // (e.g. a private topic whose key didn't come through the link), the form
+  // below is already prefilled and the person can just hit Subscribe again.
+  useEffect(() => {
+    if (initialTopic && !autoSubmitted.current) {
+      autoSubmitted.current = true;
+      handleSubscribe({ name: initialTopic, key: initialApiKey });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <View style={styles.container}>
@@ -57,8 +73,9 @@ export default function SubscribeScreen({ onSubscribed, onBack }: SubscribeScree
         behavior={Platform.OS === "ios" ? "padding" : "height"}
       >
         <Text style={styles.description}>
-          Enter a topic name to receive notifications from it on this device.
-          If the topic is private, you'll need the API key from the topic owner.
+          {loading && initialTopic
+            ? `Subscribing this device to "${initialTopic}"...`
+            : "Enter a topic name to receive notifications from it on this device. If the topic is private, you'll need the API key from the topic owner."}
         </Text>
 
         <View style={styles.inputGroup}>
@@ -108,7 +125,7 @@ export default function SubscribeScreen({ onSubscribed, onBack }: SubscribeScree
 
         <TouchableOpacity
           style={[styles.subscribeButton, loading && styles.buttonDisabled]}
-          onPress={handleSubscribe}
+          onPress={() => handleSubscribe()}
           disabled={loading}
         >
           {loading ? (

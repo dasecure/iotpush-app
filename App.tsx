@@ -48,13 +48,15 @@ export default function App() {
   const [screen, setScreen] = useState<Screen>("login");
   const [activeTab, setActiveTab] = useState<Tab>("topics");
   const [selectedTopic, setSelectedTopic] = useState<Topic | null>(null);
+  const [pendingSubscribe, setPendingSubscribe] = useState<{ topic: string; key?: string } | null>(null);
   const [pushToken, setPushToken] = useState<string | null>(null);
   const [initialDeepLink, setInitialDeepLink] = useState<string | null>(null);
   const [tappedNotification, setTappedNotification] = useState<NotificationTapData | null>(null);
 
   const handleDeepLink = useCallback((url: string) => {
     try {
-      const path = url.replace(/^iotpush:\/\//, '').split('?')[0];
+      const withoutScheme = url.replace(/^iotpush:\/\//, '');
+      const [path, queryString] = withoutScheme.split('?');
       if (path === 'inbox') {
         setScreen('main');
         setActiveTab('inbox');
@@ -64,6 +66,17 @@ export default function App() {
       } else if (path === 'settings') {
         setScreen('main');
         setActiveTab('settings');
+      } else if (path === 'subscribe') {
+        // iotpush://subscribe?topic=<name>&key=<api_key optional>
+        // Lets a QR code or a link from another app (e.g. a device claim page)
+        // land a signed-in user straight on a prefilled/auto-submitted
+        // subscribe — no typing the topic name in by hand.
+        const params = new URLSearchParams(queryString || '');
+        const topic = params.get('topic');
+        if (topic) {
+          setPendingSubscribe({ topic, key: params.get('key') || undefined });
+          setScreen('subscribe');
+        }
       }
     } catch (e) {
       console.log('Deep link error:', e);
@@ -257,8 +270,10 @@ export default function App() {
       <ErrorBoundary>
         <StatusBar style="light" />
         <SubscribeScreen
-          onBack={() => setScreen("main")}
-          onSubscribed={() => setScreen("main")}
+          initialTopic={pendingSubscribe?.topic}
+          initialApiKey={pendingSubscribe?.key}
+          onBack={() => { setPendingSubscribe(null); setScreen("main"); }}
+          onSubscribed={() => { setPendingSubscribe(null); setScreen("main"); }}
         />
       </ErrorBoundary>
     );
