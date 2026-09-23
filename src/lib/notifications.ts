@@ -4,6 +4,12 @@ import Constants from "expo-constants";
 import { Platform, Linking } from "react-native";
 import { supabase } from "./supabase";
 import type { NotificationAction } from "./types";
+import {
+  buildChoiceCategories,
+  resolveChoiceSlot,
+  MAX_CHOICE_SLOTS_ANDROID,
+  MAX_CHOICE_SLOTS_IOS,
+} from "./choiceSlots";
 
 let AsyncStorage: any = null;
 try {
@@ -132,6 +138,21 @@ const STATIC_CATEGORIES = [
 ];
 
 for (const cat of STATIC_CATEGORIES) {
+  Notifications.setNotificationCategoryAsync(cat.id, cat.actions as Notifications.NotificationAction[]).catch((e) =>
+    console.log(`Failed to register category ${cat.id}:`, e)
+  );
+}
+
+// ─── Generic choice categories for `select` questions ───
+// iotpush_choice_<n>_<mask> with neutral "Option A".."Option D" buttons. The
+// server lists "A · <label>" in the body and the real choice ids in
+// data.choice_slots; handleNotificationResponse maps the slot back. Android
+// shows at most 3 action buttons, so 4-choice categories are iOS-only: an
+// Android phone gets no buttons for those and the tap opens the app instead,
+// which beats silently dropping the 4th choice.
+for (const cat of buildChoiceCategories(
+  Platform.OS === "android" ? MAX_CHOICE_SLOTS_ANDROID : MAX_CHOICE_SLOTS_IOS
+)) {
   Notifications.setNotificationCategoryAsync(cat.id, cat.actions as Notifications.NotificationAction[]).catch((e) =>
     console.log(`Failed to register category ${cat.id}:`, e)
   );
@@ -514,6 +535,7 @@ async function handleNotificationResponse(
     topic?: string;
     actions?: NotificationAction[];
     click_url?: string;
+    choice_slots?: string[];
   } | undefined;
 
   const messageId = data?.message_id || data?.messageId;
@@ -543,7 +565,22 @@ async function handleNotificationResponse(
 
   if (!messageId) return;
 
-  const matchedAction = data?.actions?.find((a) => a.id === actionIdentifier);
+  // Generic choice buttons ("Option A".."D") report as choice_<i>; translate
+  // back to the real choice id. An untranslatable slot is never reported
+  // as-is, since "choice_0" is not one of the question's choices.
+  const slot = resolveChoiceSlot(actionIdentifier, data?.choice_slots);
+  if (slot.kind === "unresolvable") {
+    await warnActionNotDelivered(slot.slot, {
+      ok: false,
+      recorded: false,
+      retryable: true,
+      reason: "This notification did not say which choice that button stands for.",
+    });
+    return;
+  }
+  const actionId = slot.actionId;
+
+  const matchedAction = data?.actions?.find((a) => a.id === actionId);
   if (matchedAction?.type === "url" && matchedAction.url) {
     Linking.openURL(matchedAction.url).catch(console.error);
   }
@@ -551,9 +588,9 @@ async function handleNotificationResponse(
   // The result used to be discarded here, so a tap from the lock screen that
   // never landed produced no feedback at all: the user believed they had
   // answered while the sender was still waiting or had already given up.
-  const result = await reportAction(messageId, actionIdentifier, userText || undefined);
+  const result = await reportAction(messageId, actionId, userText || undefined);
   if (!result.recorded) {
-    await warnActionNotDelivered(actionIdentifier, result);
+    await warnActionNotDelivered(matchedAction?.label || actionId, result);
   }
 }
 
