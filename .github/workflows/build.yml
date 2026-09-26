@@ -77,7 +77,8 @@ jobs:
             --non-interactive --json --no-wait)
           BUILD_ID=$(echo "$BUILD_JSON" | jq -r '.[0].id')
           echo "build-id=$BUILD_ID" >> "$GITHUB_OUTPUT"
-          eas build:wait --id "$BUILD_ID"
+          if [ -z "$BUILD_ID" ] || [ "$BUILD_ID" = "null" ]; then echo "::error::eas build returned no id: $BUILD_JSON"; exit 1; fi
+          ./scripts/eas-wait.sh "$BUILD_ID" 90
 
   # ─── Android Build ───
   build-android:
@@ -109,7 +110,8 @@ jobs:
             --non-interactive --json --no-wait)
           BUILD_ID=$(echo "$BUILD_JSON" | jq -r '.[0].id')
           echo "build-id=$BUILD_ID" >> "$GITHUB_OUTPUT"
-          eas build:wait --id "$BUILD_ID"
+          if [ -z "$BUILD_ID" ] || [ "$BUILD_ID" = "null" ]; then echo "::error::eas build returned no id: $BUILD_JSON"; exit 1; fi
+          ./scripts/eas-wait.sh "$BUILD_ID" 90
 
   # ─── Submit iOS to TestFlight ───
   submit-ios:
