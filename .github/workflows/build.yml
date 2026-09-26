@@ -52,6 +52,8 @@ jobs:
       github.event.inputs.platform == 'all' ||
       github.event.inputs.platform == 'ios'
     runs-on: ubuntu-latest
+    outputs:
+      build-id: ${{ steps.build.outputs.build-id }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -64,8 +66,18 @@ jobs:
           token: ${{ secrets.EXPO_TOKEN }}
       - run: npm ci --legacy-peer-deps
 
+      # Capture the exact build id so the submit job pins this artifact instead
+      # of guessing with --latest (which resubmits an already-uploaded binary
+      # and fails with "build number N has already been used").
       - name: Build iOS
-        run: eas build --platform ios --profile ${{ github.event.inputs.profile }} --non-interactive
+        id: build
+        run: |
+          BUILD_JSON=$(eas build --platform ios \
+            --profile "${{ github.event.inputs.profile }}" \
+            --non-interactive --json --no-wait)
+          BUILD_ID=$(echo "$BUILD_JSON" | jq -r '.[0].id')
+          echo "build-id=$BUILD_ID" >> "$GITHUB_OUTPUT"
+          eas build:wait --id "$BUILD_ID"
 
   # ─── Android Build ───
   build-android:
@@ -75,6 +87,8 @@ jobs:
       github.event.inputs.platform == 'all' ||
       github.event.inputs.platform == 'android'
     runs-on: ubuntu-latest
+    outputs:
+      build-id: ${{ steps.build.outputs.build-id }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -88,7 +102,14 @@ jobs:
       - run: npm ci --legacy-peer-deps
 
       - name: Build Android
-        run: eas build --platform android --profile ${{ github.event.inputs.profile }} --non-interactive
+        id: build
+        run: |
+          BUILD_JSON=$(eas build --platform android \
+            --profile "${{ github.event.inputs.profile }}" \
+            --non-interactive --json --no-wait)
+          BUILD_ID=$(echo "$BUILD_JSON" | jq -r '.[0].id')
+          echo "build-id=$BUILD_ID" >> "$GITHUB_OUTPUT"
+          eas build:wait --id "$BUILD_ID"
 
   # ─── Submit iOS to TestFlight ───
   submit-ios:
@@ -111,7 +132,10 @@ jobs:
       - run: npm ci --legacy-peer-deps
 
       - name: Submit to App Store Connect
-        run: eas submit --platform ios --latest --non-interactive
+        run: |
+          eas submit --platform ios \
+            --id "${{ needs.build-ios.outputs.build-id }}" \
+            --profile ci --non-interactive
 
   # ─── Submit Android to Google Play ───
   submit-android:
@@ -137,10 +161,18 @@ jobs:
       # The `production` profile points at ~/.config/play on the maintainer's
       # machine, so the key never has to sit inside the working tree locally.
       - name: Write Google Play service account key
-        run: echo '${{ secrets.GOOGLE_SERVICE_ACCOUNT_KEY }}' > ./google-service-account-key.json
+        env:
+          PLAY_SA_KEY: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_KEY }}
+        run: |
+          printf '%s' "$PLAY_SA_KEY" > ./google-service-account-key.json
+          jq -e '.client_email and .private_key' ./google-service-account-key.json > /dev/null \
+            || { echo "::error::GOOGLE_SERVICE_ACCOUNT_KEY is not a valid service account JSON"; exit 1; }
 
       - name: Submit to Google Play (internal track)
-        run: eas submit --platform android --latest --non-interactive --profile ci
+        run: |
+          eas submit --platform android \
+            --id "${{ needs.build-android.outputs.build-id }}" \
+            --profile ci --non-interactive
 
   # ─── Notify ───
   notify:
