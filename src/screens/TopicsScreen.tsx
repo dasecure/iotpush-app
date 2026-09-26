@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useMemo } from "react";
 import {
   View,
   Text,
@@ -16,6 +16,7 @@ import {
 import { supabase } from "../lib/supabase";
 import { subscribePushToken, unsubscribePushToken, createTopicViaAPI } from "../lib/notifications";
 import { Topic } from "../lib/types";
+import { fetchTopicsOverview, formatRelative } from "../lib/topics";
 
 interface TopicsScreenProps {
   onSelectTopic: (topic: Topic) => void;
@@ -36,60 +37,16 @@ export default function TopicsScreen({ onSelectTopic, onSubscribe, pushToken }: 
   const [subscribed, setSubscribed] = useState<Record<string, boolean>>({});
   const [toggling, setToggling] = useState<Record<string, boolean>>({});
   const [ownedTopicIds, setOwnedTopicIds] = useState<Set<string>>(new Set());
+  const [filter, setFilter] = useState("");
 
   const fetchTopics = useCallback(async () => {
     try {
-      // Get current user
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        setLoading(false);
-        return;
-      }
-
-      // Fetch topics owned by the user
-      const { data: ownedTopics } = await supabase
-        .from("iot_topics")
-        .select("*")
-        .eq("user_id", user.id)
-        .order("created_at", { ascending: false });
-
-      // Fetch topic IDs the user is subscribed to
-      const { data: subs } = await supabase
-        .from("iot_subscribers")
-        .select("topic_id")
-        .eq("user_id", user.id);
-
-      // Get subscribed topic IDs that aren't already owned
-      const ownedIds = new Set((ownedTopics || []).map((t) => t.id));
-      setOwnedTopicIds(ownedIds);
-      const subscribedIds = (subs || [])
-        .map((s) => s.topic_id)
-        .filter((id) => !ownedIds.has(id));
-
-      // Fetch subscribed topics
-      let subscribedTopics: Topic[] = [];
-      if (subscribedIds.length > 0) {
-        const { data: subTopics } = await supabase
-          .from("iot_topics")
-          .select("*")
-          .in("id", subscribedIds)
-          .order("created_at", { ascending: false });
-        subscribedTopics = subTopics || [];
-      }
-
-      // Merge: owned first, then subscribed
-      const allTopics = [...(ownedTopics || []), ...subscribedTopics];
-      setTopics(allTopics);
-
-      // Fetch message counts for all topics
+      // One RPC instead of 3 + N sequential requests (see lib/topics.ts).
+      const all = await fetchTopicsOverview();
+      setTopics(all);
+      setOwnedTopicIds(new Set(all.filter((t) => t.is_owner).map((t) => t.id)));
       const counts: Record<string, number> = {};
-      for (const topic of allTopics) {
-        const { count } = await supabase
-          .from("iot_messages")
-          .select("*", { count: "exact", head: true })
-          .eq("topic_id", topic.id);
-        counts[topic.id] = count || 0;
-      }
+      for (const t of all) counts[t.id] = t.message_count ?? 0;
       setMessageCounts(counts);
     } catch (e) {
       console.log("Failed to fetch topics:", e);
@@ -123,18 +80,25 @@ export default function TopicsScreen({ onSelectTopic, onSubscribe, pushToken }: 
     fetchTopics();
   }, [fetchTopics]);
 
+  // Subscription state depends only on the device token, not on the topic
+  // list — this used to re-run on every topics change (i.e. twice per refresh).
   useEffect(() => {
-    if (pushToken && topics.length > 0) {
-      fetchSubscriptions();
-    }
-  }, [pushToken, topics, fetchSubscriptions]);
+    fetchSubscriptions();
+  }, [fetchSubscriptions]);
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await fetchTopics();
-    await fetchSubscriptions();
+    await Promise.all([fetchTopics(), fetchSubscriptions()]);
     setRefreshing(false);
   };
+
+  const visibleTopics = useMemo(() => {
+    const q = filter.trim().toLowerCase();
+    if (!q) return topics;
+    return topics.filter(
+      (t) => t.name.toLowerCase().includes(q) || (t.description || "").toLowerCase().includes(q)
+    );
+  }, [topics, filter]);
 
   const toggleSubscription = async (topicId: string) => {
     if (!pushToken) {
@@ -245,13 +209,14 @@ export default function TopicsScreen({ onSelectTopic, onSubscribe, pushToken }: 
         text: "Unsubscribe",
         style: "destructive",
         onPress: async () => {
-          const { data: { user } } = await supabase.auth.getUser();
-          if (!user) return;
+          const { data: { session } } = await supabase.auth.getSession();
+          const uid = session?.user?.id;
+          if (!uid) return;
           await supabase
             .from("iot_subscribers")
             .delete()
             .eq("topic_id", topic.id)
-            .eq("user_id", user.id);
+            .eq("user_id", uid);
           // Remove from local state immediately
           setTopics((prev) => prev.filter((t) => t.id !== topic.id));
           setSubscribed((prev) => {
@@ -294,13 +259,42 @@ export default function TopicsScreen({ onSelectTopic, onSubscribe, pushToken }: 
         </View>
       </View>
 
+      {/* Topic filter — shown once the list is long enough to need it */}
+      {topics.length > 6 && (
+        <View style={styles.filterWrap}>
+          <TextInput
+            style={styles.filterInput}
+            placeholder={`Filter ${topics.length} topics`}
+            placeholderTextColor="#6b7280"
+            value={filter}
+            onChangeText={setFilter}
+            autoCapitalize="none"
+            autoCorrect={false}
+            clearButtonMode="while-editing"
+            returnKeyType="search"
+          />
+        </View>
+      )}
+
       {/* Topics List */}
       <FlatList
-        data={topics}
+        data={visibleTopics}
+        initialNumToRender={12}
+        windowSize={7}
+        removeClippedSubviews={Platform.OS === "android"}
+        keyboardShouldPersistTaps="handled"
         keyExtractor={(item) => item.id}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#f97316" />}
-        contentContainerStyle={[styles.list, topics.length === 0 && { flex: 1 }]}
+        contentContainerStyle={[styles.list, visibleTopics.length === 0 && { flex: 1 }]}
         ListEmptyComponent={
+          topics.length > 0 ? (
+            <View style={styles.empty}>
+              <Text style={styles.emptyTitle}>No topics match "{filter}"</Text>
+              <TouchableOpacity onPress={() => setFilter("")}>
+                <Text style={{ color: "#f97316", fontWeight: "600" }}>Clear filter</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
           <View style={styles.empty}>
             <Text style={styles.emptyIcon}>🔔</Text>
             <Text style={styles.emptyTitle}>No topics yet</Text>
@@ -309,6 +303,7 @@ export default function TopicsScreen({ onSelectTopic, onSubscribe, pushToken }: 
               <Text style={styles.emptyButtonText}>Create Topic</Text>
             </TouchableOpacity>
           </View>
+          )
         }
         renderItem={({ item }) => (
           <TouchableOpacity
@@ -362,6 +357,9 @@ export default function TopicsScreen({ onSelectTopic, onSubscribe, pushToken }: 
             {item.description && (
               <Text style={styles.topicDesc}>{item.description}</Text>
             )}
+            {item.last_message_at ? (
+              <Text style={styles.topicActivity}>Last message {formatRelative(item.last_message_at)}</Text>
+            ) : null}
             {ownedTopicIds.has(item.id) && (
               <Text style={styles.topicEndpoint}>
                 POST iotpush.com/api/push/{item.name}
@@ -487,6 +485,18 @@ const styles = StyleSheet.create({
     opacity: 0.5,
   },
   topicDesc: { color: "#9ca3af", fontSize: 14, marginTop: 4 },
+  topicActivity: { color: "#6b7280", fontSize: 12, marginTop: 6 },
+  filterWrap: { paddingHorizontal: 16, paddingTop: 12 },
+  filterInput: {
+    backgroundColor: "#111827",
+    borderWidth: 1,
+    borderColor: "#1f2937",
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    fontSize: 15,
+    color: "#fff",
+  },
   topicEndpoint: { color: "#6b7280", fontSize: 12, fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace", marginTop: 8 },
   empty: { flex: 1, alignItems: "center", justifyContent: "center", paddingTop: 80 },
   emptyIcon: { fontSize: 48, marginBottom: 16 },

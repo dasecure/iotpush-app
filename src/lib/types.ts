@@ -4,8 +4,12 @@ export interface Topic {
   name: string;
   description: string | null;
   is_private: boolean;
-  api_key: string;
+  api_key: string | null; // null for topics you only subscribe to
   created_at: string;
+  // Populated by the topics_overview() RPC (migration 013)
+  is_owner?: boolean;
+  message_count?: number;
+  last_message_at?: string | null;
 }
 
 export interface Message {
@@ -14,6 +18,9 @@ export interface Message {
   title: string | null;
   message: string;
   priority: string;
+  priority_norm?: string | null;
+  expects_response?: boolean | null;
+  response_status?: string | null;
   tags: string[] | null;
   click_url: string | null;
   metadata: Record<string, unknown> | null;

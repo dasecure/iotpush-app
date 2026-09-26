@@ -91,7 +91,8 @@ export default function MessagesScreen({ topic, onBack }: MessagesScreenProps) {
       const headers: Record<string, string> = {
         "Content-Type": "text/plain",
       };
-      if (topic.is_private) {
+      // api_key is only present on topics you own (topics_overview, mig. 013).
+      if (topic.is_private && topic.api_key) {
         headers["Authorization"] = `Bearer ${topic.api_key}`;
       }
 
@@ -235,12 +236,13 @@ export default function MessagesScreen({ topic, onBack }: MessagesScreenProps) {
         </TouchableOpacity>
       </View>
 
-      {/* API Key for private topics */}
-      {topic.is_private && (
+      {/* API Key for private topics — owners only. Subscribers used to be
+          shown (and able to copy) the owner's key here. */}
+      {topic.is_private && !!topic.api_key && (
         <TouchableOpacity
           style={styles.apiKeyBar}
           onPress={() => {
-            Clipboard.setStringAsync(topic.api_key);
+            Clipboard.setStringAsync(topic.api_key!);
             Alert.alert("Copied!", "API key copied");
           }}
         >
