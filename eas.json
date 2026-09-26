@@ -24,12 +24,10 @@
     "preview": {
       "extends": "base",
       "distribution": "internal",
-      "channel": "preview",
       "autoIncrement": true
     },
     "production": {
       "extends": "base",
-      "channel": "production",
       "autoIncrement": true
     }
   },
