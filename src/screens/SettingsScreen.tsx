@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -7,10 +7,12 @@ import {
   ScrollView,
   Alert,
   Platform,
+  Switch,
 } from "react-native";
 import * as Clipboard from "expo-clipboard";
 import Constants from "expo-constants";
 import { supabase } from "../lib/supabase";
+import { appleShortcuts } from "../lib/appleShortcuts";
 
 interface SettingsScreenProps {
   userEmail: string | null;
@@ -21,6 +23,44 @@ interface SettingsScreenProps {
 
 export default function SettingsScreen({ userEmail, emailVerified, pushToken, onLogout }: SettingsScreenProps) {
   const apiBaseUrl = "https://www.iotpush.com/api/push/";
+
+  const [shortcutsEnabled, setShortcutsEnabled] = useState(false);
+  const [shortcutsBusy, setShortcutsBusy] = useState(false);
+
+  useEffect(() => {
+    if (appleShortcuts.supported) {
+      appleShortcuts.isEnabled().then(setShortcutsEnabled);
+    }
+  }, []);
+
+  const handleShortcutsToggle = async (value: boolean) => {
+    // Optimistic flip with revert-on-failure: a Switch that lags the tap by a
+    // network round trip reads as broken.
+    setShortcutsEnabled(value);
+    setShortcutsBusy(true);
+    try {
+      if (value) {
+        await appleShortcuts.enable();
+        Alert.alert(
+          "Shortcuts enabled",
+          'Open the Shortcuts app and search for "iotpush" to use Send Notification and Ask a Question. You can revoke this anytime from here or from the web dashboard.'
+        );
+      } else {
+        const { revoked } = await appleShortcuts.disable();
+        Alert.alert(
+          "Shortcuts disabled",
+          revoked
+            ? "The key was revoked. Existing shortcuts will stop working."
+            : "Shortcuts are disabled on this device. Also revoke the \"Apple Shortcuts\" key in the web dashboard → Settings → API keys."
+        );
+      }
+    } catch (e: any) {
+      setShortcutsEnabled(!value);
+      Alert.alert("Error", e?.message || "Something went wrong. Try again.");
+    } finally {
+      setShortcutsBusy(false);
+    }
+  };
 
   const handleLogout = () => {
     Alert.alert("Logout", "Are you sure?", [
@@ -152,6 +192,30 @@ export default function SettingsScreen({ userEmail, emailVerified, pushToken, on
           </View>
           <Text style={styles.hint}>Tap to copy</Text>
         </TouchableOpacity>
+
+        {/* Apple Shortcuts (iOS builds with the native module only) */}
+        {appleShortcuts.supported && (
+          <>
+            <Text style={styles.sectionTitle}>Apple Shortcuts</Text>
+            <View style={styles.card}>
+              <View style={styles.row}>
+                <Text style={styles.label}>Enable Apple Shortcuts</Text>
+                <Switch
+                  value={shortcutsEnabled}
+                  disabled={shortcutsBusy}
+                  onValueChange={handleShortcutsToggle}
+                  trackColor={{ false: "#374151", true: "#f97316" }}
+                  thumbColor="#fff"
+                />
+              </View>
+              <Text style={styles.hintText}>
+                Adds "Send Notification" and "Ask a Question" to the Shortcuts app
+                and Siri. Creates a revocable API key scoped to sending and asking
+                — nothing else.
+              </Text>
+            </View>
+          </>
+        )}
 
         {/* Push Notifications */}
         <Text style={styles.sectionTitle}>Push Notifications</Text>

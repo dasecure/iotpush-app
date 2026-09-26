@@ -2,8 +2,8 @@
   "expo": {
     "name": "iotpush",
     "slug": "iotpush",
-    "version": "2.1.0",
-    "orientation": "portrait",
+    "version": "2.3.0",
+    "orientation": "default",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
     "scheme": "iotpush",
@@ -15,15 +15,12 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.dasecure.iotpush",
-      "buildNumber": "4",
       "icon": "./assets/icon.png",
       "infoPlist": {
         "NSAppTransportSecurity": {
           "NSAllowsArbitraryLoads": false
-        }
-      },
-      "config": {
-        "usesNonExemptEncryption": false
+        },
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
@@ -32,7 +29,6 @@
         "backgroundColor": "#f68205"
       },
       "package": "com.dasecure.iotpush",
-      "versionCode": 11,
       "googleServicesFile": "./google-services.json"
     },
     "plugins": [
@@ -41,6 +37,16 @@
         {
           "icon": "./assets/notification-icon.png",
           "color": "#f97316"
+        }
+      ],
+      "./plugins/withIotpushAppIntents",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "enableProguardInReleaseBuilds": true,
+            "enableShrinkResourcesInReleaseBuilds": true
+          }
         }
       ]
     ],
