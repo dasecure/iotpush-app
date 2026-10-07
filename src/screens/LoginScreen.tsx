@@ -11,6 +11,8 @@ import {
   Image,
 } from "react-native";
 import { supabase } from "../lib/supabase";
+import { signInWithZapQR } from "../lib/zapqrAuth";
+import ZapQRButton from "../components/ZapQRButton";
 
 interface LoginScreenProps {
   onLogin: () => void;
@@ -22,6 +24,18 @@ export default function LoginScreen({ onLogin, onSignup }: LoginScreenProps) {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [zapqrLoading, setZapqrLoading] = useState(false);
+
+  // New and returning people alike: the server signs in the account with the
+  // ZapQR address, or creates one. The session lands via onAuthStateChange.
+  const handleZapQR = async () => {
+    setError("");
+    setZapqrLoading(true);
+    const result = await signInWithZapQR(email);
+    setZapqrLoading(false);
+    if (result.status === "signed_in") onLogin();
+    else if (result.status === "error") setError(result.message);
+  };
 
   const handleLogin = async () => {
     if (!email || !password) {
@@ -70,6 +84,15 @@ export default function LoginScreen({ onLogin, onSignup }: LoginScreenProps) {
         <Text style={styles.subtitle}>Push notifications for your devices</Text>
 
         <View style={styles.form}>
+          <ZapQRButton onPress={handleZapQR} loading={zapqrLoading} disabled={loading} />
+          <Text style={styles.zapqrHint}>Use your passkey. No password.</Text>
+
+          <View style={styles.divider}>
+            <View style={styles.dividerLine} />
+            <Text style={styles.dividerText}>or use your password</Text>
+            <View style={styles.dividerLine} />
+          </View>
+
           <TextInput
             style={styles.input}
             placeholder="Email"
@@ -93,7 +116,7 @@ export default function LoginScreen({ onLogin, onSignup }: LoginScreenProps) {
           <TouchableOpacity
             style={styles.button}
             onPress={handleLogin}
-            disabled={loading}
+            disabled={loading || zapqrLoading}
           >
             {loading ? (
               <ActivityIndicator color="#000" />
@@ -163,6 +186,27 @@ const styles = StyleSheet.create({
   },
   form: {
   },
+  zapqrHint: {
+    color: "#6b7280",
+    fontSize: 13,
+    textAlign: "center",
+    marginTop: 8,
+  },
+  divider: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginVertical: 20,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: "#1f2937",
+  },
+  dividerText: {
+    color: "#6b7280",
+    fontSize: 13,
+    marginHorizontal: 12,
+  },
   input: {
     backgroundColor: "#111827",
     borderWidth: 1,
@@ -189,6 +233,7 @@ const styles = StyleSheet.create({
     color: "#ef4444",
     fontSize: 14,
     textAlign: "center",
+    marginBottom: 4,
   },
   linkButton: {
     marginTop: 16,
