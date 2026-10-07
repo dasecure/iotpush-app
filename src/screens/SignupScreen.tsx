@@ -11,6 +11,8 @@ import {
   Alert,
 } from "react-native";
 import { supabase } from "../lib/supabase";
+import { signInWithZapQR } from "../lib/zapqrAuth";
+import ZapQRButton from "../components/ZapQRButton";
 
 interface SignupScreenProps {
   onSignup: () => void;
@@ -23,6 +25,18 @@ export default function SignupScreen({ onSignup, onLogin }: SignupScreenProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [confirmationSent, setConfirmationSent] = useState(false);
+  const [zapqrLoading, setZapqrLoading] = useState(false);
+
+  // ZapQR has already verified the address, so there is no "check your email"
+  // step: the account is created and signed in in one go.
+  const handleZapQR = async () => {
+    setError("");
+    setZapqrLoading(true);
+    const result = await signInWithZapQR(email);
+    setZapqrLoading(false);
+    if (result.status === "signed_in") onSignup();
+    else if (result.status === "error") setError(result.message);
+  };
 
   const handleSignup = async () => {
     if (!email || !password) {
@@ -115,6 +129,15 @@ export default function SignupScreen({ onSignup, onLogin }: SignupScreenProps) {
         <Text style={styles.subtitle}>Create your account</Text>
 
         <View style={styles.form}>
+          <ZapQRButton onPress={handleZapQR} loading={zapqrLoading} disabled={loading} label="Sign up with ZapQR" />
+          <Text style={styles.zapqrHint}>One step. No password, no confirmation email.</Text>
+
+          <View style={styles.divider}>
+            <View style={styles.dividerLine} />
+            <Text style={styles.dividerText}>or sign up with email</Text>
+            <View style={styles.dividerLine} />
+          </View>
+
           <TextInput
             style={styles.input}
             placeholder="Email"
@@ -138,7 +161,7 @@ export default function SignupScreen({ onSignup, onLogin }: SignupScreenProps) {
           <TouchableOpacity
             style={styles.button}
             onPress={handleSignup}
-            disabled={loading}
+            disabled={loading || zapqrLoading}
           >
             {loading ? (
               <ActivityIndicator color="#000" />
@@ -173,6 +196,10 @@ const styles = StyleSheet.create({
   linkButton: { marginTop: 16, alignItems: "center" },
   linkText: { color: "#9ca3af", fontSize: 14 },
   linkAccent: { color: "#f97316" },
+  zapqrHint: { color: "#6b7280", fontSize: 13, textAlign: "center", marginTop: 8 },
+  divider: { flexDirection: "row", alignItems: "center", marginVertical: 20 },
+  dividerLine: { flex: 1, height: 1, backgroundColor: "#1f2937" },
+  dividerText: { color: "#6b7280", fontSize: 13, marginHorizontal: 12 },
   confirmTitle: {
     fontSize: 24,
     fontWeight: "bold",

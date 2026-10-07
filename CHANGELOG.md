@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+### Sign in with ZapQR (iOS + Android)
+- "Continue with ZapQR" on the login screen and "Sign up with ZapQR" on signup: passkey
+  sign-in through auth.zapqr.ai in the system browser (authorization code + PKCE). New and
+  returning accounts alike — no password, no confirmation email. Email + password still works.
+- Lands on the same iotPush account as the website's ZapQR button (matched by ZapQR identity,
+  first time by verified email).
+- Adds `expo-web-browser` + `expo-crypto` and the `com.dasecure.iotpush://` URL scheme, so this
+  needs a new store build (not an OTA update). Requires iotpush.com `POST /api/auth/zapqr/native`.
+
 ### Performance — Topics refresh
 - Topics screen now loads via one `topics_overview()` RPC (migration 013) instead of
   3 + N sequential requests (one `count(*)` per topic, awaited serially). 27 topics:

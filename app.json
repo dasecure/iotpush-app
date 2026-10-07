@@ -6,7 +6,10 @@
     "orientation": "default",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
-    "scheme": "iotpush",
+    "scheme": [
+      "iotpush",
+      "com.dasecure.iotpush"
+    ],
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
@@ -39,6 +42,7 @@
           "color": "#f97316"
         }
       ],
+      "expo-web-browser",
       "./plugins/withIotpushAppIntents",
       [
         "expo-build-properties",
