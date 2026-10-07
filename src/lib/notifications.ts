@@ -2,7 +2,9 @@ import * as Notifications from "expo-notifications";
 import * as Device from "expo-device";
 import Constants from "expo-constants";
 import { Platform, Linking } from "react-native";
+import * as Crypto from "expo-crypto";
 import { supabase } from "./supabase";
+import { base64url } from "./zapqrOidc";
 import type { NotificationAction } from "./types";
 import {
   buildChoiceCategories,
@@ -215,6 +217,59 @@ async function getAccessToken(): Promise<string | null> {
   }
 }
 
+// ─── This app install ───
+// A random id made once per install and sent with every device registration.
+// The server keeps only its hash. It is how iotPush tells "the same app, now
+// signed in as someone else" (pause the previous account's notifications on
+// this phone) from "somebody who merely learned this phone's push token"
+// (touch nothing). Not an identifier of the person: it is never sent anywhere
+// else and is wiped with the app.
+const INSTALL_ID_KEY = "iotpush_install_id";
+const PUSH_TOKEN_KEY = "iotpush_push_token";
+
+async function getInstallId(): Promise<string | null> {
+  if (!AsyncStorage) return null;
+  try {
+    const existing = await AsyncStorage.getItem(INSTALL_ID_KEY);
+    if (existing && /^[A-Za-z0-9\-_]{22,128}$/.test(existing)) return existing;
+    const fresh = base64url(await Crypto.getRandomBytesAsync(32));
+    await AsyncStorage.setItem(INSTALL_ID_KEY, fresh);
+    return fresh;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Call BEFORE supabase.auth.signOut(): tells iotPush this account is leaving
+ * this phone, so its notifications stop arriving here. Without it the phone
+ * kept receiving the old account's topics after sign-out — and after the next
+ * person signed in. Subscriptions are paused, not deleted: signing back in
+ * restores them. Best effort with a short timeout; sign-out never waits on it
+ * for long and never fails because of it.
+ */
+export async function releaseDeviceBeforeSignOut(pushToken?: string | null): Promise<void> {
+  try {
+    const token = pushToken || (AsyncStorage ? await AsyncStorage.getItem(PUSH_TOKEN_KEY) : null);
+    const accessToken = await getAccessToken();
+    if (!token || !accessToken) return;
+    const abort = new AbortController();
+    const timer = setTimeout(() => abort.abort(), 5000);
+    try {
+      await fetch(`${API_BASE}/devices/release`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
+        body: JSON.stringify({ push_token: token }),
+        signal: abort.signal,
+      });
+    } finally {
+      clearTimeout(timer);
+    }
+  } catch (err) {
+    console.log("Device release failed:", err);
+  }
+}
+
 // ─── Register device with IOTPush API ───
 async function registerDeviceWithAPI(pushToken: string): Promise<string | null> {
   const token = await getAccessToken();
@@ -235,6 +290,7 @@ async function registerDeviceWithAPI(pushToken: string): Promise<string | null> 
         platform: Platform.OS as "ios" | "android",
         device_name: deviceName,
         app_version: appVersion,
+        install_id: await getInstallId(),
       }),
     });
 
@@ -246,6 +302,9 @@ async function registerDeviceWithAPI(pushToken: string): Promise<string | null> 
     const device = await response.json();
     if (AsyncStorage && device.id) {
       await AsyncStorage.setItem("iotpush_device_id", device.id);
+      // Kept so sign-out can release this phone even if the screen that asks
+      // was never handed the token.
+      await AsyncStorage.setItem(PUSH_TOKEN_KEY, pushToken);
     }
     console.log("[iotpush] Device registered:", device.id);
     return device.id;
@@ -310,12 +369,32 @@ export async function subscribePushToken(topicId: string, pushToken: string): Pr
       { onConflict: "topic_id,endpoint" }
     );
     if (error) {
+      // The usual cause: this phone already has a row on this topic that
+      // belongs to the account that used the phone before, and row-level
+      // security will not let us rewrite someone else's row. The server
+      // re-binds it to whoever holds the phone now.
       console.log("Subscribe push token error:", error.message);
-      return false;
+      return await subscribeViaAPI(topicId);
     }
     return true;
   } catch (e) {
     console.log("Subscribe push token failed:", e);
+    return false;
+  }
+}
+
+async function subscribeViaAPI(topicId: string): Promise<boolean> {
+  try {
+    const accessToken = await getAccessToken();
+    if (!accessToken) return false;
+    const deviceId = AsyncStorage ? await AsyncStorage.getItem("iotpush_device_id") : null;
+    const response = await fetch(`${API_BASE}/subscribe`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
+      body: JSON.stringify({ topic_id: topicId, ...(deviceId ? { device_id: deviceId } : {}) }),
+    });
+    return response.ok;
+  } catch {
     return false;
   }
 }

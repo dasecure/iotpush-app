@@ -13,6 +13,7 @@ import * as Clipboard from "expo-clipboard";
 import Constants from "expo-constants";
 import { supabase } from "../lib/supabase";
 import { appleShortcuts } from "../lib/appleShortcuts";
+import { releaseDeviceBeforeSignOut } from "../lib/notifications";
 
 interface SettingsScreenProps {
   userEmail: string | null;
@@ -68,6 +69,9 @@ export default function SettingsScreen({ userEmail, emailVerified, pushToken, on
       {
         text: "Logout",
         onPress: async () => {
+          // While the session is still valid: stop this account's
+          // notifications arriving on this phone.
+          await releaseDeviceBeforeSignOut(pushToken);
           await supabase.auth.signOut();
           onLogout();
         },
