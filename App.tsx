@@ -26,6 +26,7 @@ class ErrorBoundary extends React.Component<{children: React.ReactNode}, {hasErr
 }
 import { StatusBar } from "expo-status-bar";
 import { supabase } from "./src/lib/supabase";
+import { handleZapqrRedirect } from "./src/lib/zapqrAuth";
 import { registerForPushNotifications, addNotificationReceivedListener, addNotificationResponseListener, setOnNotificationTap, processInitialNotificationResponse, NotificationTapData } from "./src/lib/notifications";
 import { Topic } from "./src/lib/types";
 import SplashScreenComponent from "./src/screens/SplashScreen";
@@ -54,6 +55,9 @@ export default function App() {
   const [tappedNotification, setTappedNotification] = useState<NotificationTapData | null>(null);
 
   const handleDeepLink = useCallback((url: string) => {
+    // The ZapQR sign-in redirect (com.dasecure.iotpush://auth/zapqr?code=…) is
+    // not navigation: hand it to the sign-in in flight and route nothing.
+    if (handleZapqrRedirect(url)) return;
     try {
       const withoutScheme = url.replace(/^iotpush:\/\//, '');
       const [path, queryString] = withoutScheme.split('?');
@@ -86,7 +90,9 @@ export default function App() {
   // Listen for deep links (when app is running in background)
   useEffect(() => {
     Linking.getInitialURL().then((url) => {
-      if (url) setInitialDeepLink(url);
+      // A cold start on the sign-in redirect has no transaction to finish
+      // (it lived in memory) — drop it rather than replay it after login.
+      if (url && !handleZapqrRedirect(url)) setInitialDeepLink(url);
     });
     const sub = Linking.addEventListener('url', ({ url }) => {
       handleDeepLink(url);
