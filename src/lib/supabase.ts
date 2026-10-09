@@ -1,7 +1,8 @@
 import { createClient } from "@supabase/supabase-js";
 
-const supabaseUrl = "https://dhrcdbybknhxjtbjpoem.supabase.co";
-const supabaseAnonKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRocmNkYnlia25oeGp0Ympwb2VtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njk5ODY2MzIsImV4cCI6MjA4NTU2MjYzMn0.DLZAC6YjQWji9rBBj30Rpr_dS8HHomr_NSW_EdGvRaI";
+export const SUPABASE_URL = "https://dhrcdbybknhxjtbjpoem.supabase.co";
+const supabaseUrl = SUPABASE_URL;
+export const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRocmNkYnlia25oeGp0Ympwb2VtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njk5ODY2MzIsImV4cCI6MjA4NTU2MjYzMn0.DLZAC6YjQWji9rBBj30Rpr_dS8HHomr_NSW_EdGvRaI";
 
 let AsyncStorage: any = null;
 try {
@@ -34,7 +35,7 @@ const storage = {
   },
 };
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+export const supabase = createClient(supabaseUrl, SUPABASE_ANON_KEY, {
   auth: {
     storage,
     autoRefreshToken: true,

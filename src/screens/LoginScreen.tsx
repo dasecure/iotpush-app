@@ -13,6 +13,8 @@ import {
 import { supabase } from "../lib/supabase";
 import { signInWithZapQR } from "../lib/zapqrAuth";
 import ZapQRButton from "../components/ZapQRButton";
+import { signInWithGoogle } from "../lib/googleAuth";
+import GoogleButton from "../components/GoogleButton";
 
 interface LoginScreenProps {
   onLogin: () => void;
@@ -25,6 +27,8 @@ export default function LoginScreen({ onLogin, onSignup }: LoginScreenProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [zapqrLoading, setZapqrLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
+  const busy = loading || zapqrLoading || googleLoading;
 
   // New and returning people alike: the server signs in the account with the
   // ZapQR address, or creates one. The session lands via onAuthStateChange.
@@ -33,6 +37,15 @@ export default function LoginScreen({ onLogin, onSignup }: LoginScreenProps) {
     setZapqrLoading(true);
     const result = await signInWithZapQR(email);
     setZapqrLoading(false);
+    if (result.status === "signed_in") onLogin();
+    else if (result.status === "error") setError(result.message);
+  };
+
+  const handleGoogle = async () => {
+    setError("");
+    setGoogleLoading(true);
+    const result = await signInWithGoogle();
+    setGoogleLoading(false);
     if (result.status === "signed_in") onLogin();
     else if (result.status === "error") setError(result.message);
   };
@@ -81,15 +94,17 @@ export default function LoginScreen({ onLogin, onSignup }: LoginScreenProps) {
             <Text style={styles.titleAccent}>push</Text>
           </View>
         </View>
-        <Text style={styles.subtitle}>Push notifications for your devices</Text>
+        <Text style={styles.subtitle}>Sign in to your account</Text>
 
         <View style={styles.form}>
-          <ZapQRButton onPress={handleZapQR} loading={zapqrLoading} disabled={loading} />
-          <Text style={styles.zapqrHint}>Use your passkey. No password.</Text>
+          {/* Same order and words as iotpush.com/login: ZapQR, Google, then email. */}
+          <ZapQRButton onPress={handleZapQR} loading={zapqrLoading} disabled={busy && !zapqrLoading} />
+          <GoogleButton onPress={handleGoogle} loading={googleLoading} disabled={busy && !googleLoading} />
+          <Text style={styles.zapqrHint}>No password needed.</Text>
 
           <View style={styles.divider}>
             <View style={styles.dividerLine} />
-            <Text style={styles.dividerText}>or use your password</Text>
+            <Text style={styles.dividerText}>or use your email</Text>
             <View style={styles.dividerLine} />
           </View>
 
@@ -116,12 +131,12 @@ export default function LoginScreen({ onLogin, onSignup }: LoginScreenProps) {
           <TouchableOpacity
             style={styles.button}
             onPress={handleLogin}
-            disabled={loading || zapqrLoading}
+            disabled={busy}
           >
             {loading ? (
               <ActivityIndicator color="#000" />
             ) : (
-              <Text style={styles.buttonText}>Log In</Text>
+              <Text style={styles.buttonText}>Sign In</Text>
             )}
           </TouchableOpacity>
 

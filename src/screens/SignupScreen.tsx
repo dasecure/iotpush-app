@@ -13,6 +13,8 @@ import {
 import { supabase } from "../lib/supabase";
 import { signInWithZapQR } from "../lib/zapqrAuth";
 import ZapQRButton from "../components/ZapQRButton";
+import { signInWithGoogle } from "../lib/googleAuth";
+import GoogleButton from "../components/GoogleButton";
 
 interface SignupScreenProps {
   onSignup: () => void;
@@ -26,6 +28,8 @@ export default function SignupScreen({ onSignup, onLogin }: SignupScreenProps) {
   const [error, setError] = useState("");
   const [confirmationSent, setConfirmationSent] = useState(false);
   const [zapqrLoading, setZapqrLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
+  const busy = loading || zapqrLoading || googleLoading;
 
   // ZapQR has already verified the address, so there is no "check your email"
   // step: the account is created and signed in in one go.
@@ -34,6 +38,17 @@ export default function SignupScreen({ onSignup, onLogin }: SignupScreenProps) {
     setZapqrLoading(true);
     const result = await signInWithZapQR(email);
     setZapqrLoading(false);
+    if (result.status === "signed_in") onSignup();
+    else if (result.status === "error") setError(result.message);
+  };
+
+  // Same as ZapQR: Google has verified the address, so the account is created
+  // (or signed in, if it already exists) in one go.
+  const handleGoogle = async () => {
+    setError("");
+    setGoogleLoading(true);
+    const result = await signInWithGoogle();
+    setGoogleLoading(false);
     if (result.status === "signed_in") onSignup();
     else if (result.status === "error") setError(result.message);
   };
@@ -129,7 +144,9 @@ export default function SignupScreen({ onSignup, onLogin }: SignupScreenProps) {
         <Text style={styles.subtitle}>Create your account</Text>
 
         <View style={styles.form}>
-          <ZapQRButton onPress={handleZapQR} loading={zapqrLoading} disabled={loading} label="Sign up with ZapQR" />
+          {/* Same order and words as iotpush.com/signup: ZapQR, Google, then email. */}
+          <ZapQRButton onPress={handleZapQR} loading={zapqrLoading} disabled={busy && !zapqrLoading} />
+          <GoogleButton onPress={handleGoogle} loading={googleLoading} disabled={busy && !googleLoading} />
           <Text style={styles.zapqrHint}>One step. No password, no confirmation email.</Text>
 
           <View style={styles.divider}>
@@ -161,7 +178,7 @@ export default function SignupScreen({ onSignup, onLogin }: SignupScreenProps) {
           <TouchableOpacity
             style={styles.button}
             onPress={handleSignup}
-            disabled={loading || zapqrLoading}
+            disabled={busy}
           >
             {loading ? (
               <ActivityIndicator color="#000" />
@@ -173,7 +190,7 @@ export default function SignupScreen({ onSignup, onLogin }: SignupScreenProps) {
           <TouchableOpacity onPress={onLogin} style={styles.linkButton}>
             <Text style={styles.linkText}>
               Already have an account?{" "}
-              <Text style={styles.linkAccent}>Log in</Text>
+              <Text style={styles.linkAccent}>Sign in</Text>
             </Text>
           </TouchableOpacity>
         </View>
