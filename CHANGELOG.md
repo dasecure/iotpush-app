@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+### Continue with Google (iOS + Android), sign-in aligned with iotpush.com
+- "Continue with Google" under "Continue with ZapQR" on login and signup. Supabase Google OAuth
+  with PKCE (S256, verifier from expo-crypto — not supabase-js, which falls back to Math.random
+  on Hermes) in the system browser. New and returning accounts alike.
+- The code returns via iotpush.com `/auth/native/google` (inside the existing Supabase redirect
+  allow list) to `com.dasecure.iotpush://auth/google`; an app_state echo means a redirect the
+  app did not start can neither complete nor cancel a sign-in. Requires that web route deployed.
+- Login and signup now match the website word for word: ZapQR, Google, "No password needed." /
+  "One step. No password, no confirmation email.", then email. "Log In" -> "Sign In".
+- JS + assets only (no new native modules): ships as a store build or an OTA update.
+
 ### Sign in with ZapQR (iOS + Android)
 - "Continue with ZapQR" on the login screen and "Sign up with ZapQR" on signup: passkey
   sign-in through auth.zapqr.ai in the system browser (authorization code + PKCE). New and
