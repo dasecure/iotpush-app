@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 2.5.0 — 2026-10-09
 
 ### Continue with Google (iOS + Android), sign-in aligned with iotpush.com
 - "Continue with Google" under "Continue with ZapQR" on login and signup. Supabase Google OAuth
